@@ -1,0 +1,302 @@
+import Layout from "@/components/layout";
+import { useListAppointments, useCreateAppointment, useUpdateAppointment, useDeleteAppointment, useListPatients, getListAppointmentsQueryKey } from "@workspace/api-client-react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+
+function to12h(time24: string): string {
+  if (!time24) return time24;
+  const [hStr, mStr] = time24.split(":");
+  let h = parseInt(hStr, 10);
+  const m = mStr ?? "00";
+  const ampm = h >= 12 ? "p.m." : "a.m.";
+  if (h === 0) h = 12;
+  else if (h > 12) h -= 12;
+  return `${h}:${m} ${ampm}`;
+}
+
+const statusColors: Record<string, string> = {
+  scheduled: "bg-blue-500/20 text-blue-300",
+  confirmed: "bg-green-500/20 text-green-300",
+  completed: "bg-gray-500/20 text-gray-300",
+  cancelled: "bg-red-500/20 text-red-300",
+  no_show: "bg-orange-500/20 text-orange-300",
+};
+
+const statusLabels: Record<string, string> = {
+  scheduled: "Programada",
+  confirmed: "Confirmada",
+  completed: "Completada",
+  cancelled: "Cancelada",
+  no_show: "No asistió",
+};
+
+const TREATMENTS = [
+  "Implantes dentales", "Diseño de sonrisa", "Ortodoncia", "Blanqueamiento",
+  "Carillas", "Prótesis fija", "Valoración general", "Limpieza dental",
+  "Extracción", "Endodoncia", "Periodoncia",
+];
+
+type AppointmentForm = {
+  patientId: string;
+  treatment: string;
+  date: string;
+  startTime: string;
+  duration: string;
+  notes: string;
+  status?: string;
+};
+
+const emptyForm: AppointmentForm = {
+  patientId: "", treatment: "", date: new Date().toISOString().slice(0, 10),
+  startTime: "09:00", duration: "60", notes: "",
+};
+
+export default function Appointments() {
+  const [view, setView] = useState<"day" | "week">("week");
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState<AppointmentForm>(emptyForm);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const dateStr = currentDate.toISOString().slice(0, 10);
+
+  const { data: appointments, isLoading } = useListAppointments(
+    { date: view === "day" ? dateStr : undefined },
+    { query: { queryKey: getListAppointmentsQueryKey({ date: view === "day" ? dateStr : undefined }) } }
+  );
+  const { data: patients } = useListPatients();
+  const createAppointment = useCreateAppointment();
+  const updateAppointment = useUpdateAppointment();
+  const deleteAppointment = useDeleteAppointment();
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: getListAppointmentsQueryKey() });
+
+  const navigate = (dir: number) => {
+    const d = new Date(currentDate);
+    if (view === "day") d.setDate(d.getDate() + dir);
+    else d.setDate(d.getDate() + dir * 7);
+    setCurrentDate(d);
+  };
+
+  const openCreate = () => { setForm({ ...emptyForm, date: dateStr }); setEditingId(null); setDialogOpen(true); };
+  const openEdit = (a: any) => {
+    setForm({ patientId: String(a.patientId), treatment: a.treatment, date: a.date, startTime: a.startTime, duration: "60", notes: a.notes ?? "", status: a.status });
+    setEditingId(a.id);
+    setDialogOpen(true);
+  };
+
+  const handleSave = () => {
+    const data = {
+      patientId: parseInt(form.patientId),
+      treatment: form.treatment,
+      date: form.date,
+      startTime: form.startTime,
+      duration: parseInt(form.duration),
+      notes: form.notes || undefined,
+      ...(editingId ? { status: form.status as any } : {}),
+    };
+    if (editingId) {
+      updateAppointment.mutate({ id: editingId, data }, {
+        onSuccess: () => { toast({ title: "Cita actualizada" }); setDialogOpen(false); invalidate(); },
+        onError: () => toast({ variant: "destructive", title: "Error al actualizar la cita" }),
+      });
+    } else {
+      createAppointment.mutate({ data }, {
+        onSuccess: () => { toast({ title: "Cita creada correctamente" }); setDialogOpen(false); invalidate(); },
+        onError: (e: any) => toast({ variant: "destructive", title: e?.data?.error === "Time slot conflict" ? "Conflicto de horario: ya hay una cita en ese horario" : "Error al crear la cita" }),
+      });
+    }
+  };
+
+  const apptsByDate: Record<string, any[]> = {};
+  for (const a of appointments ?? []) {
+    if (!apptsByDate[a.date]) apptsByDate[a.date] = [];
+    apptsByDate[a.date].push(a);
+  }
+
+  const weekDays: Date[] = [];
+  const start = new Date(currentDate);
+  start.setDate(start.getDate() - start.getDay() + 1);
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start); d.setDate(d.getDate() + i); weekDays.push(d);
+  }
+
+  const formatDateLabel = () => {
+    if (view === "day") return currentDate.toLocaleDateString("es-CO", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+    return `Semana del ${weekDays[0].toLocaleDateString("es-CO", { day: "numeric", month: "short" })} al ${weekDays[6].toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" })}`;
+  };
+
+  return (
+    <Layout>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Agenda</h1>
+            <p className="text-muted-foreground mt-1">Gestión de citas y disponibilidad</p>
+          </div>
+          <Button onClick={openCreate} className="bg-primary hover:bg-primary/90">
+            <Plus className="h-4 w-4 mr-2" />
+            Nueva Cita
+          </Button>
+        </div>
+
+        <div className="flex items-center justify-between bg-card/80 rounded-xl p-4 border border-border/50 gap-4">
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}><ChevronLeft className="h-5 w-5" /></Button>
+          <p className="font-medium text-sm capitalize text-center">{formatDateLabel()}</p>
+          <Button variant="ghost" size="icon" onClick={() => navigate(1)}><ChevronRight className="h-5 w-5" /></Button>
+          <div className="flex gap-1 bg-background rounded-lg p-1 ml-auto">
+            {(["day", "week"] as const).map(v => (
+              <Button key={v} variant={view === v ? "default" : "ghost"} size="sm" onClick={() => setView(v)} className={view === v ? "bg-primary text-primary-foreground" : ""}>
+                {v === "day" ? "Día" : "Semana"}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-20 w-full" />)}</div>
+        ) : view === "day" ? (
+          <div className="space-y-3">
+            {!(apptsByDate[dateStr]?.length) ? (
+              <div className="text-center py-16 text-muted-foreground">
+                <p className="font-medium">No hay citas para este día</p>
+                <p className="text-sm mt-1">Usa el botón "Nueva Cita" para agendar una</p>
+              </div>
+            ) : (apptsByDate[dateStr] ?? []).map(a => (
+              <Card key={a.id} className="border-border/50 bg-card/80 hover:bg-card transition-colors">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className="flex flex-col items-center gap-1 w-20">
+                        <span className="text-xs font-mono text-accent font-semibold">{to12h(a.startTime)}</span>
+                        <div className="w-px h-4 bg-border" />
+                        <span className="text-xs font-mono text-muted-foreground">{to12h(a.endTime)}</span>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-foreground">{a.patientName}</p>
+                        <p className="text-sm text-muted-foreground">{a.treatment}</p>
+                        <p className="text-xs text-muted-foreground">{a.patientPhone}</p>
+                        {a.notes && <p className="text-xs text-muted-foreground/70 mt-1 italic">{a.notes}</p>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge className={`text-xs ${statusColors[a.status] ?? ""}`}>{statusLabels[a.status] ?? a.status}</Badge>
+                      <Button variant="outline" size="sm" onClick={() => openEdit(a)}>Editar</Button>
+                      <Button variant="outline" size="sm" className="text-destructive" onClick={() => deleteAppointment.mutate({ id: a.id }, { onSuccess: () => { toast({ title: "Cita cancelada" }); invalidate(); } })}>Cancelar</Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-7 gap-2">
+            {weekDays.map((day, i) => {
+              const ds = day.toISOString().slice(0, 10);
+              const dayAppts = apptsByDate[ds] ?? [];
+              const isToday = ds === new Date().toISOString().slice(0, 10);
+              return (
+                <div key={i} className={cn("rounded-xl border p-2 min-h-36", isToday ? "border-accent/50 bg-accent/5" : "border-border/50 bg-card/50")}>
+                  <p className={cn("text-xs font-semibold mb-2 capitalize", isToday ? "text-accent" : "text-muted-foreground")}>
+                    {day.toLocaleDateString("es-CO", { weekday: "short", day: "numeric" })}
+                  </p>
+                  <div className="space-y-1">
+                    {dayAppts.map(a => (
+                      <div
+                        key={a.id}
+                        className="text-xs p-1.5 rounded-md bg-primary/20 text-primary-foreground/90 cursor-pointer hover:bg-primary/30"
+                        onClick={() => openEdit(a)}
+                      >
+                        <p className="font-semibold truncate">{to12h(a.startTime)}</p>
+                        <p className="truncate">{a.patientName}</p>
+                        <p className="truncate text-primary-foreground/60">{a.treatment}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="bg-card border-border">
+          <DialogHeader>
+            <DialogTitle>{editingId ? "Editar Cita" : "Nueva Cita"}</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-2">
+            <div className="col-span-2 space-y-1">
+              <Label>Paciente *</Label>
+              <Select value={form.patientId} onValueChange={v => setForm(f => ({ ...f, patientId: v }))}>
+                <SelectTrigger className="bg-background"><SelectValue placeholder="Seleccionar paciente" /></SelectTrigger>
+                <SelectContent>{(patients ?? []).map(p => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-2 space-y-1">
+              <Label>Tratamiento *</Label>
+              <Select value={form.treatment} onValueChange={v => setForm(f => ({ ...f, treatment: v }))}>
+                <SelectTrigger className="bg-background"><SelectValue placeholder="Seleccionar tratamiento" /></SelectTrigger>
+                <SelectContent>{TREATMENTS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Fecha *</Label>
+              <Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} className="bg-background" />
+            </div>
+            <div className="space-y-1">
+              <Label>Hora</Label>
+              <Input type="time" value={form.startTime} onChange={e => setForm(f => ({ ...f, startTime: e.target.value }))} className="bg-background" />
+            </div>
+            <div className="space-y-1">
+              <Label>Duración</Label>
+              <Select value={form.duration} onValueChange={v => setForm(f => ({ ...f, duration: v }))}>
+                <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="30">30 minutos</SelectItem>
+                  <SelectItem value="60">1 hora</SelectItem>
+                  <SelectItem value="90">1.5 horas</SelectItem>
+                  <SelectItem value="120">2 horas</SelectItem>
+                  <SelectItem value="180">3 horas</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {editingId && (
+              <div className="space-y-1">
+                <Label>Estado</Label>
+                <Select value={form.status ?? "scheduled"} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
+                  <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
+                  <SelectContent>{Object.entries(statusLabels).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="col-span-2 space-y-1">
+              <Label>Notas</Label>
+              <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className="bg-background" rows={2} placeholder="Observaciones o indicaciones especiales..." />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSave} disabled={createAppointment.isPending || updateAppointment.isPending} className="bg-primary">
+              {editingId ? "Guardar cambios" : "Crear cita"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Layout>
+  );
+}

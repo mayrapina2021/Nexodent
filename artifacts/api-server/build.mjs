@@ -53,7 +53,13 @@ async function buildAll() {
       "handlebars",
       "knex",
       "typeorm",
+      // WhatsApp Baileys and its native/complex deps
+      "@whiskeysockets/baileys",
+      "@hapi/boom",
       "protobufjs",
+      "libsignal",
+      "noise-handshake",
+      "qrcode",
       "onnxruntime-node",
       "@tensorflow/*",
       "@prisma/client",
