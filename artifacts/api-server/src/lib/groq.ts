@@ -242,17 +242,31 @@ Sin confirmación explícita → null. TestMode → todos null.`;
       }
     }
 
+    const MODEL_CHAIN = [
+      "llama-3.3-70b-versatile",
+      "llama-3.1-8b-instant",
+      "gemma2-9b-it",
+    ];
+
     let completion;
-    try {
-      completion = await callWithRetry("llama-3.3-70b-versatile");
-    } catch (primaryErr: any) {
-      if (primaryErr?.status === 429) {
-        logger.warn("Modelo principal agotado (TPD), usando modelo de respaldo llama-3.1-8b-instant");
-        completion = await callWithRetry("llama-3.1-8b-instant");
-      } else {
-        throw primaryErr;
+    let lastErr: any;
+    for (const model of MODEL_CHAIN) {
+      try {
+        completion = await callWithRetry(model);
+        if (model !== MODEL_CHAIN[0]) {
+          logger.warn({ model }, "Usando modelo de respaldo");
+        }
+        break;
+      } catch (err: any) {
+        lastErr = err;
+        if (err?.status === 429) {
+          logger.warn({ model }, "Modelo agotado (429), probando siguiente");
+          continue;
+        }
+        throw err;
       }
     }
+    if (!completion) throw lastErr;
 
     const rawContent = completion.choices[0]?.message?.content?.trim() ?? "";
 
