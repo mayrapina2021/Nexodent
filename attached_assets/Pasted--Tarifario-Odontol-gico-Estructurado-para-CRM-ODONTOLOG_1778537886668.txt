@@ -1,0 +1,187 @@
+# Tarifario Odontológico Estructurado para CRM
+
+## ODONTOLOGÍA GENERAL
+
+| Servicio                                 |   Precio |
+| ---------------------------------------- | -------: |
+| Profilaxis                               |  $50.000 |
+| Higiene (Remoción cálculos y profilaxis) | $172.000 |
+| Resina 1 superficie anterior             | $135.000 |
+| Resina 1 superficie posterior            | $148.000 |
+| Resina 2 superficie anterior             | $161.300 |
+| Resina 2 superficie posterior            | $174.200 |
+| Resina 3 superficie anterior             | $187.100 |
+| Resina 3 superficie posterior            | $212.900 |
+| Sellante                                 |  $53.000 |
+| Urgencia odontológica                    | $155.914 |
+| Blanqueamiento LED                       | $247.000 |
+| Blanqueamiento cubetas (2 jeringas)      | $483.900 |
+| Blanqueamiento mixto LED y 2 jeringas    | $645.200 |
+
+---
+
+## ESTÉTICA
+
+| Servicio                                                              |     Precio | Observaciones |
+| --------------------------------------------------------------------- | ---------: | ------------- |
+| Carilla resina alta estética                                          |   $280.000 | 15% contado   |
+| Carilla en cerómero                                                   |   $706.000 |               |
+| Carilla en disilicato                                                 | $1.400.000 |               |
+| Microdiseño (6 bordes en resina, aclaramiento LED y placa protectora) | $1.400.000 |               |
+
+---
+
+## REHABILITACIÓN
+
+| Servicio                                              |     Precio |
+| ----------------------------------------------------- | ---------: |
+| Ajuste de oclusión                                    |   $193.600 |
+| Acker acrílico                                        |   $529.500 |
+| Acker flexible                                        |   $698.900 |
+| Provisional                                           |   $198.000 |
+| Corona en zirconio                                    | $1.400.000 |
+| Diente reemplazar (Biodent)                           |    $89.000 |
+| Diente reemplazar (Duratone)                          |   $111.300 |
+| Gancho deflex                                         |   $103.300 |
+| Gancho metálico                                       |     $7.500 |
+| Incrustación cerámica                                 | $1.152.000 |
+| Incrustación cerómero hasta 3 sup                     |   $645.000 |
+| Incrustación cerómero 4 sup                           |   $780.700 |
+| Malla metálica paladar                                |   $162.400 |
+| Núcleo colado fibra de vidrio                         |   $360.000 |
+| Placa dual consultorio                                |   $322.600 |
+| Placa programada                                      |   $483.900 |
+| Paladar transparente                                  |    $64.600 |
+| Platino 1 (Provisional núcleo corona disilicato o ZR) | $1.960.000 |
+| Platino 2 (Prov y corona disilicato o ZR)             | $1.600.000 |
+| Prótesis flexibles hasta 8 dientes                    | $1.613.000 |
+| Prótesis estructural metálica hasta 8 dientes         | $1.820.000 |
+| Prótesis acrílica hasta 7 dientes                     |   $742.000 |
+| Prótesis total acrílica (Duratone)                    | $1.612.000 |
+| Prótesis total (Duratone)                             | $1.397.000 |
+| Prótesis total (Biodent)                              |   $987.000 |
+| Base prótesis                                         |   $140.400 |
+| Recementación de corona o carilla con Relix           |   $167.800 |
+| Recementación de corona con oxifosfato                |    $77.400 |
+| Reconstrucción de muñón                               |   $251.700 |
+| Remoción de coronas hasta 3 dientes                   |   $247.400 |
+| Reparación dientes acrílico                           |   $103.300 |
+| Reparación rebase laboratorio                         |   $148.400 |
+| Tradicional 1 (Prov, núcleo y corona MC)              | $1.400.000 |
+| Tradicional 2 (Prov y corona MC)                      | $1.016.000 |
+
+---
+
+## IMPLANTES
+
+| Servicio                                          |      Precio |
+| ------------------------------------------------- | ----------: |
+| Corona cerámica implantosoportada                 |  $2.893.000 |
+| Corona metalcerámica implantosoportada            |  $2.258.000 |
+| Elevación piso de seno por cuadrante              |  $1.600.000 |
+| Hueso 0.5 gr                                      |    $684.000 |
+| Hueso 1 gr                                        |    $890.000 |
+| Hueso 2.5 gr                                      |  $1.354.000 |
+| Membrana colágeno 15x20                           |    $670.000 |
+| Membrana colágeno 20x30                           |    $722.000 |
+| Membrana colágeno 30x40                           |    $967.000 |
+| Implante individual                               |  $1.886.500 |
+| Implante PROM (implante + corona MC)              |  $3.773.000 |
+| Pilar temporal                                    |    $270.000 |
+| Pilar en zirconio                                 |    $752.000 |
+| Prótesis híbrida sin barra (con 4 implantes)      | $14.706.000 |
+| Prótesis híbrida con barra (4 implantes)          | $19.974.000 |
+| Prótesis híbrida zirconio (6 implantes)           | $32.942.000 |
+| Sobredentadura (2 implantes)                      |  $8.224.000 |
+| Sobredentadura (3 implantes)                      | $10.019.000 |
+| Prótesis sobredentadura sin implantes (2 ajustes) |  $4.326.500 |
+
+---
+
+## CIRUGÍA
+
+| Servicio                                                    |     Precio |
+| ----------------------------------------------------------- | ---------: |
+| Amputaciones o hemisección radiculares                      |   $451.000 |
+| Autoinplante de diente sin endodoncia                       |   $589.000 |
+| Biopsias con laboratorio                                    |   $483.000 |
+| Capuchones pericoronarios                                   |   $225.000 |
+| Cordales x4 abiertas compleja                               | $1.400.000 |
+| Cordales x4 erupcionadas                                    |   $800.000 |
+| Enucleación, resección y curetaje de lesiones benignas      |   $658.000 |
+| Exodoncia resto radicular                                   |   $193.600 |
+| Exodoncia método abierto complejo                           |   $400.000 |
+| Exodoncia abierto simple                                    |   $400.000 |
+| Exodoncia simple                                            |   $148.400 |
+| Exodoncia premolares x4                                     |   $535.000 |
+| Frenilectomía labial                                        |   $430.000 |
+| Frenilectomía lingual                                       |   $484.000 |
+| Otras plastias en cavidad oral (cirugía de tejidos blandos) |   $350.000 |
+| Reservación alveolo                                         |   $154.900 |
+| Profundización de reborde (x cuadrante)                     |   $537.700 |
+| Recesión torus lingual o palatino                           |   $474.200 |
+| Ventana quirúrgica                                          |   $556.500 |
+
+---
+
+## PERIODONCIA
+
+| Servicio                                                     |     Precio |
+| ------------------------------------------------------------ | ---------: |
+| Acto quirúrgico injerto óseo y membrana                      |   $483.900 |
+| Alargamiento corona clínica con osteotomía x diente          |   $387.100 |
+| Cirugía mucogingival para recubrimiento de recesión x diente |   $554.900 |
+| Cirugía de regularización de reborde x cuadrante             |   $515.000 |
+| Control mantenimiento periodontal                            |   $215.100 |
+| Curetaje a campo abierto x cuadrante                         |   $537.700 |
+| Gingivectomía por diente                                     |   $327.400 |
+| Injerto de tejido blando                                     |   $503.300 |
+| Nivelación de cénit gingival (14 a 24)                       | $1.187.100 |
+| Remoción de cálculos subgingivales x cuadrante               |   $234.000 |
+
+---
+
+## ENDODONCIA
+
+| Servicio                                       |   Precio |
+| ---------------------------------------------- | -------: |
+| Apexificación por diente                       | $482.000 |
+| Apicectomía en dientes anteriores              | $638.000 |
+| Apicectomía en dientes posteriores             | $812.000 |
+| Blanqueamiento de diente no vital (3 sesiones) | $474.000 |
+| Corrección de reabsorción interna o externa    | $267.000 |
+| Desobturación por conducto                     | $141.000 |
+| Endodoncia unirradicular                       | $502.000 |
+| Endodoncia birradicular                        | $563.000 |
+| Endodoncia multirradicular                     | $752.000 |
+| Ferulización rígida (2-6 dientes)              | $322.000 |
+| Remoción de núcleo                             | $332.000 |
+| Urgencia endodóntica                           | $125.000 |
+
+---
+
+## ORTODONCIA GENERAL
+
+| Servicio                               |   Precio |
+| -------------------------------------- | -------: |
+| Minimplante                            | $322.600 |
+| Placa para levantar mordida            | $295.700 |
+| Reparación bracket autoligado metálico |  $75.000 |
+| Reparación bracket metálico            |  $25.000 |
+| Retenedor estético                     | $177.000 |
+| Retenedor fijo                         | $271.000 |
+| Retenedor Hawley                       | $210.000 |
+| Retiro brackets                        | $153.700 |
+| Tope oclusal                           |  $86.000 |
+
+---
+
+# PLANES DE ORTODONCIA
+
+| Plan                           | Valor Total |  1ra Cuota |  2da Cuota | Controles | Valor Control | Reparaciones | Incluye                                                   |
+| ------------------------------ | ----------: | ---------: | ---------: | --------: | ------------: | -----------: | --------------------------------------------------------- |
+| Ortodoncia autoligado metálico |  $2.780.000 |   $450.000 |   $350.000 |        18 |      $118.000 |      $75.000 | 1 radiografía, 1 kit de higiene y 2 retenedores estéticos |
+| Ortodoncia autoligado cerámico |  $4.180.000 | $1.100.000 | $1.100.000 |        18 |      $118.000 |     $150.000 | 1 radiografía, 1 kit de higiene y 2 retenedores estéticos |
+| Ortodoncia zafiro              |  $3.418.000 |   $499.000 |   $499.000 |        22 |      $118.000 |      $80.000 | 1 radiografía, 1 kit de higiene y 2 retenedores estéticos |
+| Ortodoncia Roth Mini           |  $1.950.000 |   $180.000 |   $119.900 |        22 |       $79.900 |      $25.000 | 1 radiografía, 1 kit de higiene y 2 retenedores estéticos |
+| Ortodoncia Roth Eco            |  $1.960.000 |          - |          - |        24 |       $79.900 |            - |                                                           |
