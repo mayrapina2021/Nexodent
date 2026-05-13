@@ -11,10 +11,6 @@ services:
     plan: free
     buildCommand: pnpm install && pnpm --filter @workspace/db run push && pnpm --filter @workspace/api-server run build
     startCommand: pnpm --filter @workspace/api-server run start
-    disk:
-      name: whatsapp-auth
-      mountPath: /opt/render/project/src/.whatsapp-auth
-      sizeGB: 1
     envVars:
       - key: DATABASE_URL
         fromDatabase:
