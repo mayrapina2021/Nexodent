@@ -1,5 +1,6 @@
 import { useGetMe, useLogout } from "@workspace/api-client-react";
 import { Link, useLocation } from "wouter";
+import { clearAuthToken } from "@/App";
 import { 
   LayoutDashboard, 
   Users, 
@@ -54,8 +55,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }
 
   const handleLogout = () => {
+    clearAuthToken();
     logout.mutate(undefined, {
       onSuccess: () => setLocation("/login"),
+      onError: () => setLocation("/login"),
     });
   };
 

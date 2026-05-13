@@ -12,6 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { motion } from "framer-motion";
 import ClinicLogo from "@/components/clinic-logo";
+import { saveAuthToken } from "@/App";
+
 
 const loginSchema = z.object({
   email: z.string().email("Correo electrónico inválido"),
@@ -52,7 +54,9 @@ export default function Login() {
     loginMutation.mutate(
       { data: values },
       {
-        onSuccess: () => {
+        onSuccess: (data: any) => {
+          // Save token for cross-origin Bearer auth
+          if (data?.token) saveAuthToken(data.token);
           toast({ title: "Bienvenido", description: "Sesión iniciada correctamente." });
           setLocation("/dashboard");
         },
@@ -66,6 +70,7 @@ export default function Login() {
       }
     );
   };
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 relative overflow-hidden">
