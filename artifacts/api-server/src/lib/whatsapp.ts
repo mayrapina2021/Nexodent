@@ -207,12 +207,15 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo): Promise<void> 
   if (isAudio) {
     logger.info({ jid }, "Audio recibido — respondiendo con mensaje de texto");
     const audioReplies = [
-      "¡Hola mi amor! 😊 Por acá en Dientes Fijos Medellín solo podemos recibir mensajes de texto por el momento. ¿Me contás qué necesitás? Con mucho gusto te ayudo 🦷✨",
-      "¡Hola! 😊 Qué pena, acá en Dientes Fijos Medellín solo manejamos mensajes de texto por este canal. ¿Me escribís lo que necesitás? Con todo el gusto te atiendo ❤️",
-      "Hola, bienvenido/a a Dientes Fijos Medellín 🦷 Por acá solo recibimos mensajes escritos. ¿Me contás en qué te puedo ayudar, mi amor? 😊",
+      "¡Buen día! 😊 En Dientes Fijos Medellín solo podemos recibir mensajes de texto por el momento. ¿Me podría escribir su consulta? Con mucho gusto le ayudaremos 🦷✨",
+      "¡Hola! 😊 Qué pena, en este canal de Dientes Fijos Medellín solo manejamos mensajes de texto. ¿Me podría escribir lo que necesita? Con todo el gusto le atenderemos.",
+      "Hola, bienvenido(a) a Dientes Fijos Medellín 🦷 Por ahora solo recibimos mensajes escritos por este medio. ¿Me cuenta en qué le podemos colaborar el día de hoy? 😊",
     ];
     const reply = audioReplies[Math.floor(Math.random() * audioReplies.length)];
-    await sock?.sendMessage(jid, { text: reply! });
+    if (sock) {
+      await sock.sendMessage(jid, { text: reply! });
+      logger.info({ jid }, "Respuesta automática de audio enviada");
+    }
     return;
   }
 
@@ -283,8 +286,16 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo): Promise<void> 
             lastMessageAt: new Date(),
           }).where(eq(conversationsTable.id, conv.id));
 
-          await sock?.sendMessage(jid, { text: aiText });
-          logger.info({ jid, aiText }, "Respuesta IA enviada por WhatsApp");
+          if (sock) {
+            try {
+              await sock.sendMessage(jid, { text: aiText });
+              logger.info({ jid, aiText }, "Respuesta IA enviada exitosamente a WhatsApp");
+            } catch (wsErr) {
+              logger.error({ wsErr, jid }, "Error al enviar mensaje a través de WhatsApp Socket");
+            }
+          } else {
+            logger.warn({ jid }, "No se pudo enviar mensaje: WhatsApp Socket no está conectado");
+          }
         }
         
         const { registerPatient, bookAppointment, updatePhone } = aiResult.actions;
