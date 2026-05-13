@@ -25,8 +25,8 @@ import { cn } from "@/lib/utils";
 
 import { customFetch } from "@workspace/api-client-react";
 
-const api = async (path: string, opts?: any) => {
-  return customFetch(`/api${path}`, opts);
+const api = async <T = any>(path: string, opts?: any): Promise<T> => {
+  return customFetch<T>(`/api${path}`, opts);
 };
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────

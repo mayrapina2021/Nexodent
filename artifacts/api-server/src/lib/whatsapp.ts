@@ -260,27 +260,35 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo): Promise<void> 
       unreadCount: sql`${conversationsTable.unreadCount} + 1`,
     }).where(eq(conversationsTable.id, conv.id));
 
-    if (conv.aiMode && _state.botEnabled) {
-      const availableSlots = await getAvailableSlots();
-      const aiResult = await generateAIResponse(conv.id, text, { availableSlots });
-      const aiText = aiResult.message;
+    // Refresh conversation data to ensure we have the most up-to-date AI mode
+    const [latestConv] = await db.select().from(conversationsTable).where(eq(conversationsTable.id, conv.id));
+    const aiEnabled = latestConv?.aiMode && _state.botEnabled;
 
-      await db.insert(messagesTable).values({
-        conversationId: conv.id,
-        content: aiText,
-        sender: "ai",
-        read: true,
-      });
+    if (aiEnabled) {
+      try {
+        const availableSlots = await getAvailableSlots();
+        const aiResult = await generateAIResponse(conv.id, text, { availableSlots });
+        const aiText = aiResult.message;
 
-      await db.update(conversationsTable).set({
-        lastMessage: aiText,
-        lastMessageAt: new Date(),
-      }).where(eq(conversationsTable.id, conv.id));
+        if (aiText) {
+          await db.insert(messagesTable).values({
+            conversationId: conv.id,
+            content: aiText,
+            sender: "ai",
+            read: true,
+          });
 
-      await sock?.sendMessage(jid, { text: aiText });
-      logger.info({ jid, aiText }, "Respuesta IA enviada por WhatsApp");
+          await db.update(conversationsTable).set({
+            lastMessage: aiText,
+            lastMessageAt: new Date(),
+          }).where(eq(conversationsTable.id, conv.id));
 
-      const { registerPatient, bookAppointment, updatePhone } = aiResult.actions;
+          await sock?.sendMessage(jid, { text: aiText });
+          logger.info({ jid, aiText }, "Respuesta IA enviada por WhatsApp");
+        }
+        
+        const { registerPatient, bookAppointment, updatePhone } = aiResult.actions;
+        // ... rest of processing ...
 
       if (registerPatient && !conv.patientId && registerPatient.name) {
         try {
@@ -395,7 +403,7 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo): Promise<void> 
                 notes: apptNotes,
               }).returning();
 
-              logger.info({ appt }, "Cita registrada automáticamente por bot");
+            logger.info({ appt }, "Cita registrada automáticamente por bot");
             }
           } else {
             logger.warn({ bookAppointment }, "No se pudo registrar cita: paciente no encontrado");
@@ -404,10 +412,13 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo): Promise<void> 
           logger.error({ err }, "Error registrando cita desde bot");
         }
       }
+    } catch (err) {
+      logger.error({ err }, "Error procesando respuesta IA");
     }
-  } catch (err) {
-    logger.error({ err }, "Error procesando mensaje entrante");
   }
+} catch (err) {
+  logger.error({ err }, "Error procesando mensaje entrante");
+}
 }
 
 export async function startWhatsApp(): Promise<void> {

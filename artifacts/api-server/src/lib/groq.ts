@@ -1,4 +1,4 @@
-﻿import Groq from "groq-sdk";
+import Groq from "groq-sdk";
 import { db, settingsTable, conversationsTable, messagesTable, patientsTable, aiKnowledgeTable, aiPersonalityTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
@@ -65,11 +65,6 @@ export async function generateAIResponse(
   patientMessage: string,
   opts: AIOptions = {}
 ): Promise<AIResponse> {
-  const fallback: AIResponse = {
-    message: "Gracias por escribirnos. En un momentico te responde alguien del equipo.",
-    actions: {},
-  };
-
   try {
     const [settings, personality, knowledgeEntries] = await Promise.all([
       db.select().from(settingsTable).limit(1),
@@ -308,6 +303,8 @@ Sin accion clara = null. testMode = todas null.`;
 
     const MODEL_CHAIN = [
       "llama-3.3-70b-versatile",
+      "llama-3.1-70b-versatile",
+      "mixtral-8x7b-32768",
       "llama-3.1-8b-instant",
       "gemma2-9b-it",
     ];
@@ -339,11 +336,11 @@ Sin accion clara = null. testMode = todas null.`;
       parsed = JSON.parse(rawContent);
     } catch {
       logger.warn({ rawContent }, "Groq JSON parse failed, using raw as message");
-      return { message: rawContent || fallback.message, actions: {} };
+      return { message: rawContent, actions: {} };
     }
 
     return {
-      message: parsed.message?.trim() || fallback.message,
+      message: parsed.message?.trim() || "",
       actions: {
         registerPatient: parsed.actions?.registerPatient ?? null,
         bookAppointment: parsed.actions?.bookAppointment ?? null,
@@ -352,6 +349,6 @@ Sin accion clara = null. testMode = todas null.`;
     };
   } catch (err) {
     logger.error({ err }, "Error generando respuesta IA con Groq");
-    return fallback;
+    throw err;
   }
 }

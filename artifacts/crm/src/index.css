@@ -75,21 +75,21 @@
   --elevate-2: rgba(0,0,0, .08);
 
   --background: 210 20% 98%;
-  --foreground: 220 25% 15%;
+  --foreground: 222 47% 11%;
   --border: 220 15% 88%;
   --input: 220 15% 82%;
-  --ring: 199 80% 45%;
+  --ring: 226 48% 26%;
 
   --card: 0 0% 100%;
-  --card-foreground: 220 25% 15%;
+  --card-foreground: 222 47% 11%;
   --card-border: 220 15% 90%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 220 25% 15%;
+  --popover-foreground: 222 47% 11%;
   --popover-border: 220 15% 88%;
 
-  /* Teal/cyan primary — dental clean */
-  --primary: 199 80% 42%;
+  /* Navy Blue from Logo */
+  --primary: 226 48% 26%;
   --primary-foreground: 0 0% 100%;
 
   --secondary: 210 20% 94%;
@@ -98,29 +98,30 @@
   --muted: 210 18% 95%;
   --muted-foreground: 220 12% 50%;
 
-  --accent: 199 60% 90%;
-  --accent-foreground: 199 80% 28%;
+  /* Lime Green from Logo */
+  --accent: 142 71% 45%;
+  --accent-foreground: 0 0% 100%;
 
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
 
-  /* Sidebar — slightly deeper blue-gray */
-  --sidebar: 220 30% 18%;
+  /* Sidebar — using the Navy Blue for brand consistency */
+  --sidebar: 226 48% 18%;
   --sidebar-foreground: 210 20% 90%;
-  --sidebar-border: 220 25% 24%;
-  --sidebar-primary: 199 80% 55%;
+  --sidebar-border: 226 48% 24%;
+  --sidebar-primary: 142 71% 45%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 220 25% 25%;
+  --sidebar-accent: 226 48% 25%;
   --sidebar-accent-foreground: 210 20% 92%;
-  --sidebar-ring: 199 80% 55%;
+  --sidebar-ring: 142 71% 45%;
 
-  --chart-1: 199 80% 42%;
-  --chart-2: 168 60% 40%;
+  --chart-1: 226 48% 26%;
+  --chart-2: 142 71% 45%;
   --chart-3: 245 60% 60%;
   --chart-4: 35 90% 55%;
   --chart-5: 0 72% 55%;
 
-  --app-font-sans: 'Inter', system-ui, sans-serif;
+  --app-font-sans: 'Outfit', 'Inter', system-ui, sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: 'JetBrains Mono', Menlo, monospace;
   --radius: .5rem;
@@ -173,8 +174,8 @@
   --popover-foreground: 210 20% 92%;
   --popover-border: 220 20% 22%;
 
-  --primary: 199 80% 55%;
-  --primary-foreground: 220 28% 10%;
+  --primary: 226 48% 35%;
+  --primary-foreground: 0 0% 100%;
 
   --secondary: 220 22% 18%;
   --secondary-foreground: 210 18% 80%;
@@ -182,23 +183,23 @@
   --muted: 220 22% 16%;
   --muted-foreground: 220 12% 55%;
 
-  --accent: 199 50% 20%;
-  --accent-foreground: 199 80% 75%;
+  --accent: 142 71% 35%;
+  --accent-foreground: 0 0% 100%;
 
   --destructive: 0 65% 50%;
   --destructive-foreground: 0 0% 100%;
 
-  --sidebar: 222 30% 8%;
+  --sidebar: 226 48% 10%;
   --sidebar-foreground: 210 18% 85%;
-  --sidebar-border: 220 25% 14%;
-  --sidebar-primary: 199 80% 55%;
-  --sidebar-primary-foreground: 222 28% 10%;
-  --sidebar-accent: 220 25% 14%;
+  --sidebar-border: 226 48% 15%;
+  --sidebar-primary: 142 71% 45%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 226 48% 15%;
   --sidebar-accent-foreground: 210 18% 88%;
-  --sidebar-ring: 199 80% 55%;
+  --sidebar-ring: 142 71% 45%;
 
-  --chart-1: 199 80% 55%;
-  --chart-2: 168 60% 50%;
+  --chart-1: 226 48% 35%;
+  --chart-2: 142 71% 45%;
   --chart-3: 245 60% 70%;
   --chart-4: 35 90% 60%;
   --chart-5: 0 72% 60%;

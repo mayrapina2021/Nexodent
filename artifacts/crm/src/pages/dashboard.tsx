@@ -57,11 +57,8 @@ export default function Dashboard() {
     <Layout>
       <div className="space-y-8">
         <div>
-          <div className="flex items-baseline gap-3 flex-wrap mb-1">
-            <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-sky-400 via-cyan-300 to-teal-400 bg-clip-text text-transparent drop-shadow-sm" style={{ fontFamily: "'Georgia', 'Times New Roman', serif", letterSpacing: "-0.02em" }}>
-              Dientes Fijos Medellín
-            </h1>
-            <span className="text-4xl md:text-5xl select-none" role="img" aria-label="muela">🦷</span>
+          <div className="flex items-center gap-4 mb-2">
+            <img src="/logo.jpg" alt="Dientes Fijos Medellín" className="h-16 md:h-24 w-auto object-contain" />
           </div>
           <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Panel de Control</p>
         </div>

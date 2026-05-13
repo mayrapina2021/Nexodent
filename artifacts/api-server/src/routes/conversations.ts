@@ -206,30 +206,41 @@ router.post("/conversations/incoming", async (req, res): Promise<void> => {
     unreadCount: sql`${conversationsTable.unreadCount} + 1`,
   }).where(eq(conversationsTable.id, conv.id));
 
-  if (!conv.aiMode) {
+  // Refresh conversation data to ensure we have the most up-to-date AI mode
+  const [latestConv] = await db.select().from(conversationsTable).where(eq(conversationsTable.id, conv.id));
+  const aiEnabled = latestConv?.aiMode;
+
+  if (!aiEnabled) {
     res.status(201).json({ conversation: conv, aiResponse: null });
     return;
   }
 
   // ── Generar respuesta IA con horarios disponibles ──────────────────────────
-  const availableSlots = await getAvailableSlots();
-  const aiResult = await generateAIResponse(conv.id, message, { availableSlots });
-  const aiText = aiResult.message;
+  try {
+    const availableSlots = await getAvailableSlots();
+    const aiResult = await generateAIResponse(conv.id, message, { availableSlots });
+    const aiText = aiResult.message;
 
-  const [aiMsg] = await db.insert(messagesTable).values({
-    conversationId: conv.id,
-    content: aiText,
-    sender: "ai",
-    read: true,
-  }).returning();
+    if (!aiText) {
+       res.status(201).json({ conversation: conv, aiResponse: null });
+       return;
+    }
 
-  await db.update(conversationsTable).set({
-    lastMessage: aiText,
-    lastMessageAt: new Date(),
-  }).where(eq(conversationsTable.id, conv.id));
+    const [aiMsg] = await db.insert(messagesTable).values({
+      conversationId: conv.id,
+      content: aiText,
+      sender: "ai",
+      read: true,
+    }).returning();
 
-  // ── Procesar acciones: registrar paciente ──────────────────────────────────
-  const { registerPatient, bookAppointment, updatePhone } = aiResult.actions;
+    await db.update(conversationsTable).set({
+      lastMessage: aiText,
+      lastMessageAt: new Date(),
+    }).where(eq(conversationsTable.id, conv.id));
+
+    // ── Procesar acciones: registrar paciente ──────────────────────────────────
+    const { registerPatient, bookAppointment, updatePhone } = aiResult.actions;
+    // ... rest of processing ...
   const formattedPhone = phone.startsWith("+") ? phone : `+${phone}`;
 
   if (registerPatient && !conv.patientId && registerPatient.name) {
@@ -348,9 +359,11 @@ router.post("/conversations/incoming", async (req, res): Promise<void> => {
     } catch (err) {
       logger.error({ err }, "Error registrando cita desde incoming");
     }
+  } catch (err) {
+    logger.error({ err }, "Error generando respuesta IA en incoming");
   }
 
-  res.status(201).json({ conversation: conv, aiResponse: aiMsg, actions: aiResult.actions });
+  res.status(201).json({ conversation: conv, aiResponse: typeof aiMsg !== 'undefined' ? aiMsg : null, actions: typeof aiResult !== 'undefined' ? aiResult.actions : null });
 });
 
 // ── Enviar mensaje manual del agente ─────────────────────────────────────────
@@ -392,20 +405,28 @@ router.post("/conversations/:id/ai-reply", async (req, res): Promise<void> => {
 
   const context = triggerMessage ?? lastMessages[0]?.content ?? "Hola";
   const availableSlots = await getAvailableSlots();
-  const aiResponse = await generateAIResponse(id, context, { availableSlots });
-  const aiText = aiResponse.message;
+  
+  let aiMsg = null;
+  try {
+    const aiResponse = await generateAIResponse(id, context, { availableSlots });
+    const aiText = aiResponse.message;
 
-  const [aiMsg] = await db.insert(messagesTable).values({
-    conversationId: id,
-    content: aiText,
-    sender: "ai",
-    read: true,
-  }).returning();
+    if (aiText) {
+      [aiMsg] = await db.insert(messagesTable).values({
+        conversationId: id,
+        content: aiText,
+        sender: "ai",
+        read: true,
+      }).returning();
 
-  await db.update(conversationsTable).set({
-    lastMessage: aiText,
-    lastMessageAt: new Date(),
-  }).where(eq(conversationsTable.id, id));
+      await db.update(conversationsTable).set({
+        lastMessage: aiText,
+        lastMessageAt: new Date(),
+      }).where(eq(conversationsTable.id, id));
+    }
+  } catch (err) {
+    logger.error({ err }, "Error en manual ai-reply");
+  }
 
   res.status(201).json(aiMsg);
 });
