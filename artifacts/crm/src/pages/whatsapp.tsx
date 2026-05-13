@@ -9,9 +9,19 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { getAuthToken } from "@/lib/auth-token";
 
 const api = async (path: string, opts?: RequestInit) => {
-  const res = await fetch(`/api${path}`, { ...opts, credentials: "include", headers: { "Content-Type": "application/json" } });
+  const token = getAuthToken();
+  const res = await fetch(`/api${path}`, {
+    ...opts,
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+      ...(opts?.headers ?? {}),
+    },
+  });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 };

@@ -8,6 +8,7 @@ import {
   ChevronDown, ChevronUp, FileText, CheckCircle, AlertTriangle,
   Sparkles, MessageSquare, Target, Volume2, Zap,
 } from "lucide-react";
+import { getAuthToken } from "@/lib/auth-token";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,10 +26,15 @@ import { cn } from "@/lib/utils";
 // ─── API helpers (direct fetch, sin codegen) ───────────────────────────────
 
 const api = async (path: string, opts?: RequestInit) => {
+  const token = getAuthToken();
   const res = await fetch(`/api${path}`, {
     ...opts,
     credentials: "include",
-    headers: { "Content-Type": "application/json", ...(opts?.headers ?? {}) },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+      ...(opts?.headers ?? {}),
+    },
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
