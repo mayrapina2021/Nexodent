@@ -13,7 +13,15 @@ import Automations from "@/pages/automations";
 import Settings from "@/pages/settings";
 import AITraining from "@/pages/ai-training";
 
+import { setBaseUrl } from "@workspace/api-client-react";
+
+// Configuración de la API en producción
+if (import.meta.env.PROD) {
+  setBaseUrl("https://dientesbot-api.onrender.com");
+}
+
 const queryClient = new QueryClient({
+
   defaultOptions: {
     queries: {
       retry: false,

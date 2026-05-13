@@ -9,7 +9,7 @@ services:
     name: dientesbot-api
     env: node
     plan: free
-    buildCommand: pnpm install && pnpm run build
+
     startCommand: pnpm --filter @workspace/api-server run start
     envVars:
       - key: DATABASE_URL
