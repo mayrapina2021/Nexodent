@@ -196,8 +196,8 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo): Promise<void> 
     return;
   }
 
-  // Detectar si es un audio/nota de voz
-  const isAudio = !!(msg.message?.audioMessage || msg.message?.pttMessage);
+  // Detectar si es un audio/nota de voz (PTT o audio normal)
+  const isAudio = !!msg.message?.audioMessage;
 
   const text =
     msg.message?.conversation ??
