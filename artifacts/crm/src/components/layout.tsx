@@ -46,6 +46,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isLoading && !user) {
+      clearAuthToken();
       setLocation("/login");
     }
   }, [isLoading, user, setLocation]);

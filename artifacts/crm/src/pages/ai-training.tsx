@@ -23,22 +23,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-// ─── API helpers (direct fetch, sin codegen) ───────────────────────────────
+import { customFetch } from "@workspace/api-client-react";
 
-const api = async (path: string, opts?: RequestInit) => {
-  const token = getAuthToken();
-  const baseUrl = import.meta.env.PROD ? "https://dientesbot-api.onrender.com" : "";
-  const res = await fetch(`${baseUrl}/api${path}`, {
-    ...opts,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { "Authorization": `Bearer ${token}` } : {}),
-      ...(opts?.headers ?? {}),
-    },
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+const api = async (path: string, opts?: any) => {
+  return customFetch(`/api${path}`, opts);
 };
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────

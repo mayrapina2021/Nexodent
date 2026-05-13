@@ -19,16 +19,19 @@ export function createToken(userId: number): string {
 
 export function verifyToken(token: string): number | null {
   try {
-    const [payload, sig] = token.split(".");
-    if (!payload || !sig) return null;
+    const parts = token.split(".");
+    if (parts.length !== 2) return null;
+    const [payload, sig] = parts;
+    
     const expected = createHmac("sha256", getSecret()).update(payload).digest("base64url");
-    const sigBuf = Buffer.from(sig, "base64url");
-    const expBuf = Buffer.from(expected, "base64url");
-    if (sigBuf.length !== expBuf.length) return null;
-    if (!timingSafeEqual(sigBuf, expBuf)) return null;
-    const { uid } = JSON.parse(Buffer.from(payload, "base64url").toString());
-    return typeof uid === "number" ? uid : null;
-  } catch {
+    
+    // Simple comparison first to rule out length issues with timingSafeEqual
+    if (sig !== expected) return null;
+
+    const decoded = JSON.parse(Buffer.from(payload, "base64url").toString());
+    return typeof decoded.uid === "number" ? decoded.uid : null;
+  } catch (err) {
+    console.error("Token verification error:", err);
     return null;
   }
 }
@@ -67,19 +70,28 @@ router.post("/auth/logout", async (req, res): Promise<void> => {
 });
 
 router.get("/auth/me", async (req, res): Promise<void> => {
-  // Try Bearer token first (cross-origin safe, survives server restarts)
   const token = extractToken(req);
   let userId = token ? verifyToken(token) : null;
+  const viaToken = !!userId;
 
-  // Fallback to session cookie
   if (!userId) {
     userId = (req.session as any).userId as number | undefined ?? null;
   }
 
-  if (!userId) { res.status(401).json({ error: "Not authenticated" }); return; }
+  if (!userId) {
+    res.status(401).json({ 
+      error: "No autorizado", 
+      details: token ? "Token inválido o expirado" : "Sesión no encontrada",
+      hasToken: !!token
+    });
+    return;
+  }
 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
-  if (!user) { res.status(401).json({ error: "Not authenticated" }); return; }
+  if (!user) {
+    res.status(401).json({ error: "Usuario no encontrado", viaToken });
+    return;
+  }
 
   res.json({ id: user.id, name: user.name, email: user.email, role: user.role, createdAt: user.createdAt });
 });

@@ -11,20 +11,10 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { getAuthToken } from "@/lib/auth-token";
 
-const api = async (path: string, opts?: RequestInit) => {
-  const token = getAuthToken();
-  const baseUrl = import.meta.env.PROD ? "https://dientesbot-api.onrender.com" : "";
-  const res = await fetch(`${baseUrl}/api${path}`, {
-    ...opts,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { "Authorization": `Bearer ${token}` } : {}),
-      ...(opts?.headers ?? {}),
-    },
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+import { customFetch } from "@workspace/api-client-react";
+
+const api = async (path: string, opts?: any) => {
+  return customFetch(`/api${path}`, opts);
 };
 
 type WAStatus = {
