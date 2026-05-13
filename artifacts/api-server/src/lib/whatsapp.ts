@@ -196,11 +196,27 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo): Promise<void> 
     return;
   }
 
+  // Detectar si es un audio/nota de voz
+  const isAudio = !!(msg.message?.audioMessage || msg.message?.pttMessage);
+
   const text =
     msg.message?.conversation ??
     msg.message?.extendedTextMessage?.text ??
     msg.message?.imageMessage?.caption ??
     "";
+
+  // Si es audio, responder amablemente y salir
+  if (isAudio) {
+    logger.info({ jid }, "Audio recibido — respondiendo con mensaje de texto");
+    const audioReplies = [
+      "¡Hola mi amor! 😊 Por acá en Dientes Fijos Medellín solo podemos recibir mensajes de texto por el momento. ¿Me contás qué necesitás? Con mucho gusto te ayudo 🦷✨",
+      "¡Hola! 😊 Qué pena, acá en Dientes Fijos Medellín solo manejamos mensajes de texto por este canal. ¿Me escribís lo que necesitás? Con todo el gusto te atiendo ❤️",
+      "Hola, bienvenido/a a Dientes Fijos Medellín 🦷 Por acá solo recibimos mensajes escritos. ¿Me contás en qué te puedo ayudar, mi amor? 😊",
+    ];
+    const reply = audioReplies[Math.floor(Math.random() * audioReplies.length)];
+    await sock?.sendMessage(jid, { text: reply! });
+    return;
+  }
 
   if (!text.trim()) return;
 
@@ -210,6 +226,7 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo): Promise<void> 
   const pushName = msg.pushName ?? formattedPhone;
 
   logger.info({ jid, text }, "Mensaje entrante de WhatsApp");
+
 
   try {
     let [conv] = await db.select().from(conversationsTable)
