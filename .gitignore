@@ -47,3 +47,11 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# WhatsApp Auth
+.whatsapp-auth/
+auth_info_baileys/
+
+# Env files
+.env
+.env.local

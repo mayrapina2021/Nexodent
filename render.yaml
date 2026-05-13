@@ -1,0 +1,25 @@
+services:
+  # Base de datos PostgreSQL alojada en Render
+  - type: psql
+    name: dientesbot-db
+    plan: free # Puedes cambiar a planes de pago en el dashboard de Render
+    postgresMajorVersion: 15
+
+  # Servidor API y Bot de WhatsApp
+  - type: web
+    name: dientesbot-api
+    env: node
+    plan: free
+    buildCommand: pnpm install && pnpm run build
+    startCommand: pnpm --filter @workspace/api-server run start
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: dientesbot-db
+          property: connectionString
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: GROQ_API_KEY
+        sync: false # Deberás ingresar tu API key de Groq en el dashboard de Render
+      - key: NODE_ENV
+        value: production
