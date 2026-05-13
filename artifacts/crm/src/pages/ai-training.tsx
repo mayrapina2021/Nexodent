@@ -27,7 +27,8 @@ import { cn } from "@/lib/utils";
 
 const api = async (path: string, opts?: RequestInit) => {
   const token = getAuthToken();
-  const res = await fetch(`/api${path}`, {
+  const baseUrl = import.meta.env.PROD ? "https://dientesbot-api.onrender.com" : "";
+  const res = await fetch(`${baseUrl}/api${path}`, {
     ...opts,
     credentials: "include",
     headers: {
