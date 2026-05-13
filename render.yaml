@@ -1,11 +1,10 @@
-services:
-  # Base de datos PostgreSQL alojada en Render
-  - type: psql
-    name: dientesbot-db
-    plan: free # Puedes cambiar a planes de pago en el dashboard de Render
-    postgresMajorVersion: 15
+# Configuración de Render Blueprint
+databases:
+  - name: dientesbot-db
+    plan: free
+    postgresMajorVersion: "15"
 
-  # Servidor API y Bot de WhatsApp
+services:
   - type: web
     name: dientesbot-api
     env: node
@@ -20,6 +19,6 @@ services:
       - key: SESSION_SECRET
         generateValue: true
       - key: GROQ_API_KEY
-        sync: false # Deberás ingresar tu API key de Groq en el dashboard de Render
+        sync: false
       - key: NODE_ENV
         value: production
