@@ -7,6 +7,9 @@ import { logger } from "./lib/logger";
 
 const app: Express = express();
 
+// Necesario para que las cookies funcionen correctamente detrás del proxy de Render
+app.set("trust proxy", 1);
+
 app.use(
   pinoHttp({
     logger,
@@ -27,10 +30,27 @@ app.use(
   }),
 );
 
-app.use(cors({ origin: true, credentials: true }));
+// Permitir peticiones cross-origin desde Firebase Hosting
+app.use(cors({
+  origin: ["https://dientesbot.web.app", "https://dientesbot.firebaseapp.com"],
+  credentials: true,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET ?? "dientes-fijos-secret-key-2024",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: true,        // HTTPS obligatorio en producción
+      sameSite: "none",    // Permite cookies cross-origin (Firebase → Render)
+      httpOnly: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    },
+  }),
+);
 
 app.use("/api", router);
 
