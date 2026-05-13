@@ -286,16 +286,17 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo): Promise<void> 
             lastMessageAt: new Date(),
           }).where(eq(conversationsTable.id, conv.id));
 
-          if (sock) {
-            try {
-              await sock.sendMessage(jid, { text: aiText });
-              logger.info({ jid, aiText }, "Respuesta IA enviada exitosamente a WhatsApp");
-            } catch (wsErr) {
-              logger.error({ wsErr, jid }, "Error al enviar mensaje a través de WhatsApp Socket");
-            }
-          } else {
-            logger.warn({ jid }, "No se pudo enviar mensaje: WhatsApp Socket no está conectado");
-          }
+    if (sock) {
+      logger.info({ jid, status: _state.status }, "Intentando enviar respuesta IA a WhatsApp...");
+      try {
+        await sock.sendMessage(jid, { text: aiText });
+        logger.info({ jid, aiText }, "Respuesta IA enviada exitosamente a WhatsApp");
+      } catch (wsErr) {
+        logger.error({ wsErr, jid }, "Error al enviar mensaje a través de WhatsApp Socket");
+      }
+    } else {
+      logger.error({ jid, status: _state.status }, "CRÍTICO: No se pudo enviar mensaje porque 'sock' es null");
+    }
         }
         
         const { registerPatient, bookAppointment, updatePhone } = aiResult.actions;
