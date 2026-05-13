@@ -359,11 +359,12 @@ router.post("/conversations/incoming", async (req, res): Promise<void> => {
     } catch (err) {
       logger.error({ err }, "Error registrando cita desde incoming");
     }
-  } catch (err) {
-    logger.error({ err }, "Error generando respuesta IA en incoming");
   }
+} catch (err) {
+  logger.error({ err }, "Error generando respuesta IA en incoming");
+}
 
-  res.status(201).json({ conversation: conv, aiResponse: typeof aiMsg !== 'undefined' ? aiMsg : null, actions: typeof aiResult !== 'undefined' ? aiResult.actions : null });
+res.status(201).json({ conversation: conv, aiResponse: typeof aiMsg !== 'undefined' ? aiMsg : null, actions: typeof aiResult !== 'undefined' ? aiResult.actions : null });
 });
 
 // ── Enviar mensaje manual del agente ─────────────────────────────────────────
