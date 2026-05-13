@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { motion } from "framer-motion";
 import ClinicLogo from "@/components/clinic-logo";
-import { saveAuthToken } from "@/App";
+import { saveAuthToken } from "@/lib/auth-token";
 
 
 const loginSchema = z.object({

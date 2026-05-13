@@ -14,25 +14,15 @@ import Settings from "@/pages/settings";
 import AITraining from "@/pages/ai-training";
 
 import { setBaseUrl, setAuthTokenGetter } from "@workspace/api-client-react";
-
-const TOKEN_KEY = "dientesbot_auth_token";
+import { getAuthToken } from "@/lib/auth-token";
 
 // Configuración de la API en producción
 if (import.meta.env.PROD) {
   setBaseUrl("https://dientesbot-api.onrender.com");
 }
 
-// Configure token-based auth — bypasses cross-origin cookie restrictions
-setAuthTokenGetter(() => localStorage.getItem(TOKEN_KEY));
-
-// Expose helpers so Login page can save the token after login
-export function saveAuthToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token);
-}
-
-export function clearAuthToken(): void {
-  localStorage.removeItem(TOKEN_KEY);
-}
+// Token-based auth — bypasses all cross-origin cookie restrictions
+setAuthTokenGetter(getAuthToken);
 
 const queryClient = new QueryClient({
   defaultOptions: {

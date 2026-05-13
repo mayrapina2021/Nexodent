@@ -1,6 +1,6 @@
 import { useGetMe, useLogout } from "@workspace/api-client-react";
 import { Link, useLocation } from "wouter";
-import { clearAuthToken } from "@/App";
+import { clearAuthToken } from "@/lib/auth-token";
 import { 
   LayoutDashboard, 
   Users, 
