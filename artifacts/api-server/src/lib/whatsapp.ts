@@ -1,19 +1,15 @@
 import makeWASocket, {
   DisconnectReason,
-  useMultiFileAuthState,
   proto,
   type WASocket,
 } from "@whiskeysockets/baileys";
 import { Boom } from "@hapi/boom";
 import QRCode from "qrcode";
-import path from "path";
-import fs from "fs";
 import { db, conversationsTable, messagesTable, patientsTable, appointmentsTable, settingsTable } from "@workspace/db";
 import { eq, sql, and } from "drizzle-orm";
 import { generateAIResponse } from "./groq";
 import { logger } from "./logger";
-
-const AUTH_DIR = path.join(process.cwd(), ".whatsapp-auth");
+import { usePostgresAuthState } from "./postgres-auth-state";
 
 export interface WAState {
   connected: boolean;
@@ -76,9 +72,11 @@ export async function disconnectWA(): Promise<void> {
     try { await sock.logout(); } catch {}
     sock = null;
   }
-  if (fs.existsSync(AUTH_DIR)) {
-    fs.rmSync(AUTH_DIR, { recursive: true, force: true });
-  }
+  // Clear persisted auth from DB so next start shows QR
+  try {
+    const { clearAuth } = await usePostgresAuthState();
+    await clearAuth();
+  } catch {}
   _state = {
     connected: false,
     phone: null,
@@ -413,13 +411,10 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo): Promise<void> 
 }
 
 export async function startWhatsApp(): Promise<void> {
-  if (!fs.existsSync(AUTH_DIR)) {
-    fs.mkdirSync(AUTH_DIR, { recursive: true });
-  }
-
   _state.status = "connecting";
 
-  const { state: authState, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
+  // Auth state persisted in PostgreSQL — survives server restarts
+  const { state: authState, saveCreds } = await usePostgresAuthState();
 
   sock = makeWASocket({
     auth: authState,
@@ -464,11 +459,9 @@ export async function startWhatsApp(): Promise<void> {
         logger.info({ statusCode }, "WhatsApp desconectado, reconectando...");
         setTimeout(() => startWhatsApp(), 3000);
       } else {
-        logger.info("WhatsApp cerró sesión (loggedOut)");
-        if (fs.existsSync(AUTH_DIR)) {
-          fs.rmSync(AUTH_DIR, { recursive: true, force: true });
-          fs.mkdirSync(AUTH_DIR, { recursive: true });
-        }
+        logger.info("WhatsApp cerro sesion (loggedOut)");
+        // Clear DB auth so next connect shows QR
+        usePostgresAuthState().then(({ clearAuth }) => clearAuth()).catch(() => {});
         _state = { connected: false, phone: null, connectedAt: null, status: "disconnected", qrDataUrl: null, botEnabled: prevBotEnabled };
       }
     }

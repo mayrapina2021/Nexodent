@@ -7,3 +7,4 @@ export * from "./automations";
 export * from "./treatments";
 export * from "./settings";
 export * from "./ai-knowledge";
+export * from "./whatsapp-auth";
