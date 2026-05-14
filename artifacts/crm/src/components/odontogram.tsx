@@ -20,6 +20,13 @@ interface ToothProps {
 const Tooth = ({ id, data, selectedTool, onUpdate, readonly }: ToothProps) => {
   const handleClickSurface = (s: Surface) => {
     if (readonly) return;
+    
+    // Si la herramienta es para el diente completo, delegamos a handleClickWhole
+    if (selectedTool === "missing" || selectedTool === "extract") {
+      handleClickWhole();
+      return;
+    }
+
     const newData = { ...data, surfaces: { ...data.surfaces } };
     
     if (selectedTool === "caries") newData.surfaces[s] = "red";
@@ -37,6 +44,7 @@ const Tooth = ({ id, data, selectedTool, onUpdate, readonly }: ToothProps) => {
       onUpdate(id, { ...data, status: data.status === "extract" ? "none" : "extract" });
     }
   };
+
 
   const getSurfaceColor = (s: Surface) => {
     const val = data.surfaces[s];
