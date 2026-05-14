@@ -149,6 +149,8 @@ export const ListPatientsResponseItem = zod.object({
   lastVisit: zod.coerce.date().nullish(),
   nextAppointment: zod.coerce.date().nullish(),
   notes: zod.string().nullish(),
+  medicalHistory: zod.string().nullish(),
+  treatmentPrice: zod.number().nullish(),
   createdAt: zod.coerce.date(),
 });
 export const ListPatientsResponse = zod.array(ListPatientsResponseItem);
@@ -173,6 +175,8 @@ export const CreatePatientBody = zod.object({
     ])
     .optional(),
   notes: zod.string().optional(),
+  medicalHistory: zod.string().optional(),
+  treatmentPrice: zod.number().optional(),
 });
 
 /**
@@ -200,6 +204,8 @@ export const GetPatientResponse = zod.object({
   lastVisit: zod.coerce.date().nullish(),
   nextAppointment: zod.coerce.date().nullish(),
   notes: zod.string().nullish(),
+  medicalHistory: zod.string().nullish(),
+  treatmentPrice: zod.number().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -227,6 +233,8 @@ export const UpdatePatientBody = zod.object({
     ])
     .optional(),
   notes: zod.string().optional(),
+  medicalHistory: zod.string().optional(),
+  treatmentPrice: zod.number().optional(),
 });
 
 export const UpdatePatientResponse = zod.object({
@@ -247,6 +255,8 @@ export const UpdatePatientResponse = zod.object({
   lastVisit: zod.coerce.date().nullish(),
   nextAppointment: zod.coerce.date().nullish(),
   notes: zod.string().nullish(),
+  medicalHistory: zod.string().nullish(),
+  treatmentPrice: zod.number().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -475,6 +485,8 @@ export const GetConversationResponse = zod.object({
       lastVisit: zod.coerce.date().nullish(),
       nextAppointment: zod.coerce.date().nullish(),
       notes: zod.string().nullish(),
+      medicalHistory: zod.string().nullish(),
+      treatmentPrice: zod.number().nullish(),
       createdAt: zod.coerce.date(),
     })
     .nullish(),

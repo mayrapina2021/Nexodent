@@ -12,6 +12,8 @@ export const patientsTable = pgTable("patients", {
   status: text("status").notNull().default("new"),
   lastVisit: date("last_visit"),
   notes: text("notes"),
+  medicalHistory: text("medical_history"),
+  treatmentPrice: integer("treatment_price"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

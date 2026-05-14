@@ -40,9 +40,15 @@ type PatientForm = {
   treatment: string;
   status: string;
   notes: string;
+  medicalHistory: string;
+  treatmentPrice: string;
 };
 
-const emptyForm: PatientForm = { name: "", phone: "", email: "", age: "", treatment: "", status: "new", notes: "" };
+const emptyForm: PatientForm = {
+  name: "", phone: "", email: "", age: "", treatment: "", status: "new", notes: "",
+  medicalHistory: "", treatmentPrice: ""
+};
+
 
 export default function Patients() {
   const [search, setSearch] = useState("");
@@ -69,10 +75,21 @@ export default function Patients() {
 
   const openCreate = () => { setForm(emptyForm); setEditingId(null); setDialogOpen(true); };
   const openEdit = (p: any) => {
-    setForm({ name: p.name, phone: p.phone, email: p.email ?? "", age: p.age?.toString() ?? "", treatment: p.treatment ?? "", status: p.status, notes: p.notes ?? "" });
+    setForm({
+      name: p.name,
+      phone: p.phone,
+      email: p.email ?? "",
+      age: p.age?.toString() ?? "",
+      treatment: p.treatment ?? "",
+      status: p.status,
+      notes: p.notes ?? "",
+      medicalHistory: p.medicalHistory ?? "",
+      treatmentPrice: p.treatmentPrice?.toString() ?? ""
+    });
     setEditingId(p.id);
     setDialogOpen(true);
   };
+
 
   const handleSave = () => {
     const data = {
@@ -83,7 +100,10 @@ export default function Patients() {
       treatment: form.treatment || undefined,
       status: form.status as any,
       notes: form.notes || undefined,
+      medicalHistory: form.medicalHistory || undefined,
+      treatmentPrice: form.treatmentPrice ? parseInt(form.treatmentPrice) : undefined,
     };
+
     if (editingId) {
       updatePatient.mutate({ id: editingId, data }, {
         onSuccess: () => { toast({ title: "Paciente actualizado" }); setDialogOpen(false); invalidate(); },
@@ -223,10 +243,38 @@ export default function Patients() {
               <Input value={form.treatment} onChange={e => setForm(f => ({ ...f, treatment: e.target.value }))} className="bg-background" placeholder="Ej: Implantes, Prótesis removible..." />
             </div>
             <div className="col-span-2 space-y-1">
-              <Label>Notas</Label>
-              <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className="bg-background" rows={3} placeholder="Observaciones clínicas, preferencias, etc." />
+              <Label>Notas Generales</Label>
+              <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className="bg-background" rows={2} placeholder="Observaciones generales, preferencias, etc." />
+            </div>
+
+            {/* Nueva sección: Plan de Tratamiento */}
+            <div className="col-span-2 mt-4 pt-4 border-t border-border/50">
+              <h3 className="text-sm font-semibold text-accent mb-3 uppercase tracking-wider">Plan de Tratamiento (Historial Clínico)</h3>
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <Label>Recomendación del Doctor / Diagnóstico</Label>
+                  <Textarea
+                    value={form.medicalHistory}
+                    onChange={e => setForm(f => ({ ...f, medicalHistory: e.target.value }))}
+                    className="bg-background"
+                    rows={4}
+                    placeholder="Escribe aquí lo que el doctor recomendó en la cita..."
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Precio Estimado ($)</Label>
+                  <Input
+                    type="number"
+                    value={form.treatmentPrice}
+                    onChange={e => setForm(f => ({ ...f, treatmentPrice: e.target.value }))}
+                    className="bg-background"
+                    placeholder="Ej: 2500000"
+                  />
+                </div>
+              </div>
             </div>
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleSave} disabled={createPatient.isPending || updatePatient.isPending} className="bg-primary">
