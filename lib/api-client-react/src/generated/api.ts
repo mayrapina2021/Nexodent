@@ -58,6 +58,7 @@ import type {
   CreateEvolutionNoteBody,
   Quotation,
   CreateQuotationBody,
+  UpdateQuotationBody,
   ListEvolutionNotesParams,
   ListQuotationsParams,
 } from "./api.schemas";
@@ -3408,3 +3409,27 @@ export function useCreateQuotation<TError = ErrorType<ErrorResponse>, TContext =
     ...options?.mutation
   });
 }
+
+/**
+ * @summary Update quotation
+ */
+export const getUpdateQuotationUrl = (id: number) => `/api/clinical/quotations/${id}`;
+
+export const updateQuotation = async (id: number, data: UpdateQuotationBody, options?: RequestInit): Promise<Quotation> => {
+  return customFetch<Quotation>(getUpdateQuotationUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(data),
+  });
+};
+
+export function useUpdateQuotation<TError = ErrorType<ErrorResponse>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateQuotation>>, TError, { id: number; data: UpdateQuotationBody }, TContext>, request?: SecondParameter<typeof customFetch> }
+) {
+  return useMutation({
+    mutationFn: (props) => updateQuotation(props.id, props.data, options?.request),
+    ...options?.mutation
+  });
+}
+

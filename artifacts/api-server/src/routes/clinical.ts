@@ -88,4 +88,44 @@ router.post("/clinical/quotations", async (req, res): Promise<void> => {
   res.status(201).json(quotation);
 });
 
+router.patch("/clinical/quotations/:id", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  const parsed = CreateQuotationBody.partial().safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  
+  const { sendToWhatsApp, ...data } = parsed.data as any;
+  const [quotation] = await db.update(quotationsTable).set(data).where(eq(quotationsTable.id, id)).returning();
+  
+  if (sendToWhatsApp && quotation) {
+    try {
+      const [patient] = await db.select().from(patientsTable).where(eq(patientsTable.id, quotation.patientId));
+      const [settings] = await db.select().from(settingsTable).limit(1);
+      const sock = getWhatsAppSock();
+      
+      if (sock && patient) {
+        const jid = `${patient.phone.replace(/\D/g, "")}@s.whatsapp.net`;
+        const clinicName = settings?.clinicName ?? "Dientes Fijos Medellín";
+        
+        let text = `*📄 PRESUPUESTO ACTUALIZADO - ${clinicName}*\n\n`;
+        text += `Estimado(a) *${patient.name}*,\nAdjuntamos el detalle del plan de tratamiento actualizado:\n\n`;
+        
+        quotation.items.forEach((item: any) => {
+          text += `▪️ ${item.service}: *$${item.price.toLocaleString()}*\n`;
+        });
+        
+        text += `\n*TOTAL ESTIMADO: $${quotation.total.toLocaleString()}*\n\n`;
+        text += `_Este presupuesto es informativo. Si tienes dudas, contáctanos._`;
+        
+        await sock.sendMessage(jid, { text });
+        await db.update(quotationsTable).set({ status: "sent" }).where(eq(quotationsTable.id, id));
+      }
+    } catch (err) {
+      logger.error({ err }, "Error enviando presupuesto actualizado por WhatsApp");
+    }
+  }
+  
+  res.json(quotation);
+});
+
 export default router;
+

@@ -471,6 +471,13 @@ export interface CreateQuotationBody {
   sendToWhatsApp?: boolean;
 }
 
+export interface UpdateQuotationBody {
+  patientId?: number;
+  items?: { service: string; price: number }[];
+  total?: number;
+  sendToWhatsApp?: boolean;
+}
+
 export type ListEvolutionNotesParams = {
   patientId: number;
 };

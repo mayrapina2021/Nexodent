@@ -2,7 +2,8 @@ import Layout from "@/components/layout";
 import { useListPatients, useListQuotations, useCreateQuotation, getListQuotationsQueryKey } from "@workspace/api-client-react";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, FileText, Send, Trash2, Printer } from "lucide-react";
+import { Plus, Search, FileText, Send, Trash2, Printer, Pencil } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +21,7 @@ export default function Quotations() {
   const [selectedPatientId, setSelectedPatientId] = useState<string>("");
   const [items, setItems] = useState<QuotationItem[]>([{ service: "", price: 0 }]);
   const [sending, setSending] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -27,6 +29,7 @@ export default function Quotations() {
   const { data: patients } = useListPatients();
   const { data: quotations, isLoading } = useListQuotations();
   const createQuotation = useCreateQuotation();
+  const updateQuotation = useUpdateQuotation();
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getListQuotationsQueryKey() });
 
@@ -36,6 +39,20 @@ export default function Quotations() {
     const newItems = [...items];
     newItems[idx] = { ...newItems[idx], [field]: field === "price" ? parseInt(value) || 0 : value };
     setItems(newItems);
+  };
+
+  const openEdit = (q: any) => {
+    setEditingId(q.id);
+    setSelectedPatientId(q.patientId.toString());
+    setItems(q.items);
+    setDialogOpen(true);
+  };
+
+  const closeDialog = () => {
+    setDialogOpen(false);
+    setEditingId(null);
+    setItems([{ service: "", price: 0 }]);
+    setSelectedPatientId("");
   };
 
   const total = items.reduce((sum, item) => sum + item.price, 0);
@@ -51,23 +68,33 @@ export default function Quotations() {
     }
 
     setSending(sendToWhatsApp);
-    createQuotation.mutate({
-      data: {
-        patientId: parseInt(selectedPatientId),
-        items,
-        total,
-        sendToWhatsApp
-      }
-    }, {
-      onSuccess: () => {
-        toast({ title: sendToWhatsApp ? "Presupuesto enviado por WhatsApp" : "Presupuesto creado" });
-        setDialogOpen(false);
-        setItems([{ service: "", price: 0 }]);
-        setSelectedPatientId("");
-        invalidate();
-      },
-      onSettled: () => setSending(false)
-    });
+    
+    const payload = {
+      patientId: parseInt(selectedPatientId),
+      items,
+      total,
+      sendToWhatsApp
+    };
+
+    if (editingId) {
+      updateQuotation.mutate({ id: editingId, data: payload }, {
+        onSuccess: () => {
+          toast({ title: sendToWhatsApp ? "Presupuesto actualizado y enviado" : "Presupuesto actualizado" });
+          closeDialog();
+          invalidate();
+        },
+        onSettled: () => setSending(false)
+      });
+    } else {
+      createQuotation.mutate({ data: payload }, {
+        onSuccess: () => {
+          toast({ title: sendToWhatsApp ? "Presupuesto enviado por WhatsApp" : "Presupuesto creado" });
+          closeDialog();
+          invalidate();
+        },
+        onSettled: () => setSending(false)
+      });
+    }
   };
 
   return (
@@ -94,7 +121,7 @@ export default function Quotations() {
         ) : (
           <div className="grid gap-4">
             {quotations.map(q => (
-              <Card key={q.id} className="bg-card/80 border-border/50 overflow-hidden">
+              <Card key={q.id} className="bg-card/80 border-border/50 overflow-hidden group">
                 <CardContent className="p-0">
                   <div className="flex items-center justify-between p-4 bg-muted/20">
                     <div className="flex items-center gap-4">
@@ -113,11 +140,14 @@ export default function Quotations() {
                           {q.status === "sent" ? "Enviado" : "Borrador"}
                         </Badge>
                       </div>
+                      <Button variant="ghost" size="sm" onClick={() => openEdit(q)} className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Pencil className="h-4 w-4 mr-1" /> Abrir
+                      </Button>
                     </div>
                   </div>
                   <div className="p-4 border-t border-border/30">
                     <div className="text-xs text-muted-foreground space-y-1">
-                      {q.items.map((item, i) => (
+                      {q.items.map((item: any, i: number) => (
                         <div key={i} className="flex justify-between">
                           <span>{item.service}</span>
                           <span>${item.price.toLocaleString()}</span>
@@ -132,16 +162,16 @@ export default function Quotations() {
         )}
       </div>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={o => !o && closeDialog()}>
         <DialogContent className="max-w-2xl bg-card border-border">
           <DialogHeader>
-            <DialogTitle>Generar Presupuesto Profesional</DialogTitle>
+            <DialogTitle>{editingId ? "Editar Presupuesto" : "Generar Presupuesto Profesional"}</DialogTitle>
           </DialogHeader>
           
           <div className="space-y-6 py-4">
             <div className="space-y-2">
               <Label>Seleccionar Paciente</Label>
-              <Select value={selectedPatientId} onValueChange={setSelectedPatientId}>
+              <Select value={selectedPatientId} onValueChange={setSelectedPatientId} disabled={!!editingId}>
                 <SelectTrigger className="bg-background">
                   <SelectValue placeholder="Busca un paciente..." />
                 </SelectTrigger>
@@ -150,7 +180,6 @@ export default function Quotations() {
                     <SelectItem key={p.id} value={p.id.toString()}>{p.name} ({p.phone})</SelectItem>
                   ))}
                 </SelectContent>
-
               </Select>
             </div>
 
@@ -195,11 +224,11 @@ export default function Quotations() {
                 <Button variant="outline" onClick={() => handleCreate(false)}>Solo Guardar</Button>
                 <Button 
                   onClick={() => handleCreate(true)} 
-                  disabled={createQuotation.isPending}
+                  disabled={createQuotation.isPending || updateQuotation.isPending}
                   className="bg-accent text-accent-foreground hover:bg-accent/90"
                 >
                   <Send className="h-4 w-4 mr-2" />
-                  {sending ? "Enviando..." : "Crear y Enviar WhatsApp"}
+                  {sending ? "Enviando..." : editingId ? "Actualizar y Enviar" : "Crear y Enviar WhatsApp"}
                 </Button>
               </div>
             </div>
@@ -209,3 +238,4 @@ export default function Quotations() {
     </Layout>
   );
 }
+
