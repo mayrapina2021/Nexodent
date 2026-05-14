@@ -4,7 +4,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { useUpdatePatient, useListEvolutionNotes, useCreateEvolutionNote } from "@workspace/api-client-react";
+
 import Odontogram from "./odontogram";
 import { useToast } from "@/hooks/use-toast";
 import { History, Activity, ClipboardList, Stethoscope } from "lucide-react";

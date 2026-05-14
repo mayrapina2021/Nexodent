@@ -100,6 +100,10 @@ export interface Patient {
   lastVisit?: string | null;
   nextAppointment?: string | null;
   notes?: string | null;
+  medicalHistory?: string | null;
+  treatmentPrice?: number | null;
+  diagnosis?: string | null;
+  odontogram?: any | null;
   createdAt: string;
 }
 
@@ -123,6 +127,8 @@ export interface CreatePatientBody {
   treatment?: string;
   status?: CreatePatientBodyStatus;
   notes?: string;
+  medicalHistory?: string;
+  treatmentPrice?: number;
 }
 
 export type UpdatePatientBodyStatus =
@@ -145,6 +151,10 @@ export interface UpdatePatientBody {
   treatment?: string;
   status?: UpdatePatientBodyStatus;
   notes?: string;
+  medicalHistory?: string;
+  treatmentPrice?: number;
+  diagnosis?: string;
+  odontogram?: any;
 }
 
 export type AppointmentStatus =
@@ -428,4 +438,43 @@ export type GetAvailableSlotsParams = {
 export type ListConversationsParams = {
   search?: string;
   label?: string;
+};
+
+export interface EvolutionNote {
+  id: number;
+  patientId: number;
+  content: string;
+  doctorName?: string | null;
+  createdAt: string;
+}
+
+export interface CreateEvolutionNoteBody {
+  patientId: number;
+  content: string;
+  doctorName?: string;
+}
+
+export interface Quotation {
+  id: number;
+  patientId: number;
+  patientName?: string;
+  items: { service: string; price: number }[];
+  total: number;
+  status: string;
+  createdAt: string;
+}
+
+export interface CreateQuotationBody {
+  patientId: number;
+  items: { service: string; price: number }[];
+  total: number;
+  sendToWhatsApp?: boolean;
+}
+
+export type ListEvolutionNotesParams = {
+  patientId: number;
+};
+
+export type ListQuotationsParams = {
+  patientId?: number;
 };

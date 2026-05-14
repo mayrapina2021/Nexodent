@@ -3299,3 +3299,106 @@ export const useUpdateSettings = <
 > => {
   return useMutation(getUpdateSettingsMutationOptions(options));
 };
+/**
+ * @summary List evolution notes for a patient
+ */
+export const getListEvolutionNotesUrl = (params: ListEvolutionNotesParams) => {
+  return `/api/clinical/evolution/${params.patientId}`;
+};
+
+export const listEvolutionNotes = async (
+  params: ListEvolutionNotesParams,
+  options?: RequestInit,
+): Promise<EvolutionNote[]> => {
+  return customFetch<EvolutionNote[]>(getListEvolutionNotesUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListEvolutionNotesQueryKey = (params: ListEvolutionNotesParams) => {
+  return [`/api/clinical/evolution`, params.patientId] as const;
+};
+
+export function useListEvolutionNotes<TData = Awaited<ReturnType<typeof listEvolutionNotes>>, TError = ErrorType<ErrorResponse>>(
+  params: ListEvolutionNotesParams,
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof listEvolutionNotes>>, TError, TData>, request?: SecondParameter<typeof customFetch> }
+) {
+  const queryOptions = {
+    queryKey: getListEvolutionNotesQueryKey(params),
+    queryFn: () => listEvolutionNotes(params, options?.request),
+    ...options?.query
+  };
+  return useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+}
+
+/**
+ * @summary Create evolution note
+ */
+export const getCreateEvolutionNoteUrl = () => `/api/clinical/evolution`;
+
+export const createEvolutionNote = async (data: CreateEvolutionNoteBody, options?: RequestInit): Promise<EvolutionNote> => {
+  return customFetch<EvolutionNote>(getCreateEvolutionNoteUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(data),
+  });
+};
+
+export function useCreateEvolutionNote<TError = ErrorType<ErrorResponse>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof createEvolutionNote>>, TError, { data: CreateEvolutionNoteBody }, TContext>, request?: SecondParameter<typeof customFetch> }
+) {
+  return useMutation({
+    mutationFn: (props) => createEvolutionNote(props.data, options?.request),
+    ...options?.mutation
+  });
+}
+
+/**
+ * @summary List quotations
+ */
+export const getListQuotationsUrl = (params?: ListQuotationsParams) => {
+  const q = params?.patientId ? `?patientId=${params.patientId}` : "";
+  return `/api/clinical/quotations${q}`;
+};
+
+export const listQuotations = async (params?: ListQuotationsParams, options?: RequestInit): Promise<Quotation[]> => {
+  return customFetch<Quotation[]>(getListQuotationsUrl(params), { ...options, method: "GET" });
+};
+
+export const getListQuotationsQueryKey = (params?: ListQuotationsParams) => ["/api/clinical/quotations", params?.patientId] as const;
+
+export function useListQuotations<TData = Awaited<ReturnType<typeof listQuotations>>, TError = ErrorType<ErrorResponse>>(
+  params?: ListQuotationsParams,
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof listQuotations>>, TError, TData>, request?: SecondParameter<typeof customFetch> }
+) {
+  return useQuery({
+    queryKey: getListQuotationsQueryKey(params),
+    queryFn: () => listQuotations(params, options?.request),
+    ...options?.query
+  }) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+}
+
+/**
+ * @summary Create quotation
+ */
+export const getCreateQuotationUrl = () => `/api/clinical/quotations`;
+
+export const createQuotation = async (data: CreateQuotationBody, options?: RequestInit): Promise<Quotation> => {
+  return customFetch<Quotation>(getCreateQuotationUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(data),
+  });
+};
+
+export function useCreateQuotation<TError = ErrorType<ErrorResponse>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof createQuotation>>, TError, { data: CreateQuotationBody }, TContext>, request?: SecondParameter<typeof customFetch> }
+) {
+  return useMutation({
+    mutationFn: (props) => createQuotation(props.data, options?.request),
+    ...options?.mutation
+  });
+}
