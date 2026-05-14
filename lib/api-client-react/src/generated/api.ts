@@ -54,6 +54,12 @@ import type {
   User,
   WhatsappQr,
   WhatsappStatus,
+  EvolutionNote,
+  CreateEvolutionNoteBody,
+  Quotation,
+  CreateQuotationBody,
+  ListEvolutionNotesParams,
+  ListQuotationsParams,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
