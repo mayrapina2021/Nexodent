@@ -1,10 +1,10 @@
 import Layout from "@/components/layout";
-import {
-  useListConversations, useGetConversation, useSendMessage, useSetConversationMode,
+import { useListConversations, useGetConversation, useSendMessage, useSetConversationMode,
   getListConversationsQueryKey, getGetConversationQueryKey, getGetMessagesQueryKey
 } from "@workspace/api-client-react";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+
 import { Search, Send, Bot, User, Phone, Mail } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -32,7 +32,9 @@ export default function Conversations() {
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
+
 
   const params = { search: search || undefined };
   const { data: conversations, isLoading } = useListConversations(params, {
@@ -68,6 +70,13 @@ export default function Conversations() {
   const selected = detail?.conversation;
   const messages = detail?.messages ?? [];
   const patient = detail?.patient;
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, selectedId]);
+
 
   return (
     <Layout>
@@ -162,7 +171,8 @@ export default function Conversations() {
             </div>
 
             {/* Mensajes */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4">
+
               {detailLoading ? (
                 <div className="space-y-4">{[...Array(4)].map((_, i) => <Skeleton key={i} className={`h-12 w-2/3 ${i % 2 === 0 ? "" : "ml-auto"}`} />)}</div>
               ) : !Array.isArray(messages) || !messages.length ? (
