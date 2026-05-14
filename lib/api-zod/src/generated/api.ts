@@ -760,6 +760,62 @@ export const UpdateSettingsBody = zod.object({
   aiSignature: zod.string().optional(),
   autoConfirmAppointments: zod.boolean().optional(),
 });
+/**
+ * @summary List evolution notes for a patient
+ */
+export const ListEvolutionNotesParams = zod.object({
+  patientId: zod.coerce.number(),
+});
+
+export const EvolutionNoteResponse = zod.object({
+  id: zod.number(),
+  patientId: zod.number(),
+  content: zod.string(),
+  doctorName: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Create evolution note
+ */
+export const CreateEvolutionNoteBody = zod.object({
+  patientId: zod.number(),
+  content: zod.string(),
+  doctorName: zod.string().optional(),
+});
+
+/**
+ * @summary List quotations
+ */
+export const ListQuotationsQueryParams = zod.object({
+  patientId: zod.coerce.number().optional(),
+});
+
+export const QuotationResponse = zod.object({
+  id: zod.number(),
+  patientId: zod.number(),
+  patientName: zod.string().optional(),
+  items: zod.array(zod.object({
+    service: zod.string(),
+    price: zod.number(),
+  })),
+  total: zod.number(),
+  status: zod.string(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Create quotation
+ */
+export const CreateQuotationBody = zod.object({
+  patientId: zod.number(),
+  items: zod.array(zod.object({
+    service: zod.string(),
+    price: zod.number(),
+  })),
+  total: zod.number(),
+  sendToWhatsApp: zod.boolean().optional(),
+});
 
 export const UpdateSettingsResponse = zod.object({
   clinicName: zod.string(),

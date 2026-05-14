@@ -13,6 +13,7 @@ import {
   Brain,
   MoreHorizontal,
   X,
+  FileText,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { cn } from "@/lib/utils";
@@ -25,8 +26,10 @@ const mainNav = [
   { href: "/dashboard", label: "Panel", icon: LayoutDashboard },
   { href: "/patients", label: "Pacientes", icon: Users },
   { href: "/appointments", label: "Agenda", icon: CalendarIcon },
+  { href: "/quotations", label: "Presupuestos", icon: FileText },
   { href: "/conversations", label: "Chat", icon: MessageSquare },
 ];
+
 
 const moreNav = [
   { href: "/whatsapp", label: "WhatsApp", icon: Smartphone },

@@ -12,6 +12,8 @@ import WhatsApp from "@/pages/whatsapp";
 import Automations from "@/pages/automations";
 import Settings from "@/pages/settings";
 import AITraining from "@/pages/ai-training";
+import Quotations from "@/pages/quotations";
+
 
 import { setBaseUrl, setAuthTokenGetter } from "@workspace/api-client-react";
 import { getAuthToken } from "@/lib/auth-token";
@@ -45,7 +47,9 @@ function Router() {
       <Route path="/automations" component={Automations} />
       <Route path="/settings" component={Settings} />
       <Route path="/ai-training" component={AITraining} />
+      <Route path="/quotations" component={Quotations} />
       <Route path="/" component={Dashboard} />
+
       <Route component={NotFound} />
     </Switch>
   );

@@ -10,6 +10,8 @@ import automationsRouter from "./automations";
 import treatmentsRouter from "./treatments";
 import settingsRouter from "./settings";
 import aiTrainingRouter from "./ai-training";
+import clinicalRouter from "./clinical";
+
 
 const router: IRouter = Router();
 
@@ -24,5 +26,7 @@ router.use(automationsRouter);
 router.use(treatmentsRouter);
 router.use(settingsRouter);
 router.use(aiTrainingRouter);
+router.use(clinicalRouter);
+
 
 export default router;

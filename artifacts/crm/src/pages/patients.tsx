@@ -2,7 +2,9 @@ import Layout from "@/components/layout";
 import { useListPatients, useCreatePatient, useUpdatePatient, useDeletePatient, getListPatientsQueryKey } from "@workspace/api-client-react";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Pencil, Trash2, Phone, Mail, Calendar } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Phone, Mail, Calendar, ClipboardList } from "lucide-react";
+import PatientClinicalDialog from "@/components/patient-clinical-dialog";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -55,7 +57,9 @@ export default function Patients() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [clinicalPatient, setClinicalPatient] = useState<any | null>(null);
   const [form, setForm] = useState<PatientForm>(emptyForm);
+
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -184,24 +188,36 @@ export default function Patients() {
                       </div>
                     )}
                   </div>
-                  <div className="flex gap-2 mt-4">
-                    <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(p)}>
-                      <Pencil className="h-3.5 w-3.5 mr-1" />
-                      Editar
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => {
-                        if (confirm(`¿Estás seguro de eliminar a ${p.name}? Se borrará toda su información y citas.`)) {
-                          handleDelete(p.id);
-                        }
-                      }}
+                  <div className="flex flex-col gap-2 mt-4">
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(p)}>
+                        <Pencil className="h-3.5 w-3.5 mr-1" />
+                        Editar
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => {
+                          if (confirm(`¿Estás seguro de eliminar a ${p.name}? Se borrará toda su información y citas.`)) {
+                            handleDelete(p.id);
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <Button 
+                      variant="secondary" 
+                      size="sm" 
+                      className="w-full bg-accent/10 text-accent hover:bg-accent/20 border-accent/20"
+                      onClick={() => setClinicalPatient(p)}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <ClipboardList className="h-3.5 w-3.5 mr-1" />
+                      Ficha Clínica
                     </Button>
                   </div>
+
                 </CardContent>
               </Card>
             ))}
@@ -283,6 +299,12 @@ export default function Patients() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <PatientClinicalDialog 
+        patient={clinicalPatient} 
+        open={!!clinicalPatient} 
+        onOpenChange={o => !o && setClinicalPatient(null)} 
+      />
     </Layout>
+
   );
 }

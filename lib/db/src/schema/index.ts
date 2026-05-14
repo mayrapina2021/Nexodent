@@ -9,3 +9,4 @@ export * from "./settings";
 export * from "./ai-knowledge";
 export * from "./whatsapp-auth";
 export * from "./automation-history";
+export * from "./clinical";
