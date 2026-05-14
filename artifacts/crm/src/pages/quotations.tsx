@@ -1,5 +1,5 @@
 import Layout from "@/components/layout";
-import { useListPatients, useListQuotations, useCreateQuotation, getListQuotationsQueryKey } from "@workspace/api-client-react";
+import { useListPatients, useListQuotations, useCreateQuotation, useUpdateQuotation, getListQuotationsQueryKey } from "@workspace/api-client-react";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, FileText, Send, Trash2, Printer, Pencil } from "lucide-react";
