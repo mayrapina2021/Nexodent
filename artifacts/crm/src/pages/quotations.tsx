@@ -145,11 +145,12 @@ export default function Quotations() {
                 <SelectTrigger className="bg-background">
                   <SelectValue placeholder="Busca un paciente..." />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
                   {patients?.map(p => (
                     <SelectItem key={p.id} value={p.id.toString()}>{p.name} ({p.phone})</SelectItem>
                   ))}
                 </SelectContent>
+
               </Select>
             </div>
 
