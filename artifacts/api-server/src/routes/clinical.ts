@@ -60,25 +60,33 @@ router.post("/clinical/quotations", async (req, res): Promise<void> => {
     try {
       const [patient] = await db.select().from(patientsTable).where(eq(patientsTable.id, data.patientId));
       const [settings] = await db.select().from(settingsTable).limit(1);
-      const sock = getWhatsAppSock();
-      
-      if (sock && patient) {
-        const jid = `${patient.phone.replace(/\D/g, "")}@s.whatsapp.net`;
+      if (patient) {
+        const sock = getWhatsAppSock();
+        const cleanPhone = patient.phone.replace(/\D/g, "");
+        const finalPhone = (cleanPhone.length === 10 && cleanPhone.startsWith("3")) ? `57${cleanPhone}` : cleanPhone;
+        const jid = `${finalPhone}@s.whatsapp.net`;
         const clinicName = settings?.clinicName ?? "Dientes Fijos Medellín";
         
-        // Formatear mensaje profesional
-        let text = `*📄 PRESUPUESTO - ${clinicName}*\n\n`;
-        text += `Estimado(a) *${patient.name}*,\nAdjuntamos el detalle del plan de tratamiento recomendado:\n\n`;
-        
-        data.items.forEach((item: any) => {
-          text += `▪️ ${item.service}: *$${item.price.toLocaleString()}*\n`;
-        });
-        
-        text += `\n*TOTAL ESTIMADO: $${data.total.toLocaleString()}*\n\n`;
-        text += `_Este presupuesto es informativo. Si tienes dudas, contáctanos._`;
-        
-        await sock.sendMessage(jid, { text });
-        await db.update(quotationsTable).set({ status: "sent" }).where(eq(quotationsTable.id, quotation.id));
+        logger.info({ jid, patientName: patient.name }, "Intentando enviar nuevo presupuesto por WhatsApp");
+
+        if (sock) {
+          // Formatear mensaje profesional
+          let text = `*📄 PRESUPUESTO - ${clinicName}*\n\n`;
+          text += `Estimado(a) *${patient.name}*,\nAdjuntamos el detalle del plan de tratamiento recomendado:\n\n`;
+          
+          data.items.forEach((item: any) => {
+            text += `▪️ ${item.service}: *$${item.price.toLocaleString()}*\n`;
+          });
+          
+          text += `\n*TOTAL ESTIMADO: $${data.total.toLocaleString()}*\n\n`;
+          text += `_Este presupuesto es informativo. Si tienes dudas, contáctanos._`;
+          
+          await sock.sendMessage(jid, { text });
+          await db.update(quotationsTable).set({ status: "sent" }).where(eq(quotationsTable.id, quotation.id));
+          logger.info({ id: quotation.id }, "Nuevo presupuesto enviado y estado actualizado");
+        } else {
+          logger.warn("No se pudo enviar WhatsApp: Socket no disponible");
+        }
       }
     } catch (err) {
       logger.error({ err }, "Error enviando presupuesto por WhatsApp");
@@ -100,24 +108,33 @@ router.patch("/clinical/quotations/:id", async (req, res): Promise<void> => {
     try {
       const [patient] = await db.select().from(patientsTable).where(eq(patientsTable.id, quotation.patientId));
       const [settings] = await db.select().from(settingsTable).limit(1);
-      const sock = getWhatsAppSock();
-      
-      if (sock && patient) {
-        const jid = `${patient.phone.replace(/\D/g, "")}@s.whatsapp.net`;
+      if (patient) {
+        const sock = getWhatsAppSock();
+        const cleanPhone = patient.phone.replace(/\D/g, "");
+        // Prepend 57 if it's a 10-digit Colombian number starting with 3
+        const finalPhone = (cleanPhone.length === 10 && cleanPhone.startsWith("3")) ? `57${cleanPhone}` : cleanPhone;
+        const jid = `${finalPhone}@s.whatsapp.net`;
         const clinicName = settings?.clinicName ?? "Dientes Fijos Medellín";
         
-        let text = `*📄 PRESUPUESTO ACTUALIZADO - ${clinicName}*\n\n`;
-        text += `Estimado(a) *${patient.name}*,\nAdjuntamos el detalle del plan de tratamiento actualizado:\n\n`;
-        
-        quotation.items.forEach((item: any) => {
-          text += `▪️ ${item.service}: *$${item.price.toLocaleString()}*\n`;
-        });
-        
-        text += `\n*TOTAL ESTIMADO: $${quotation.total.toLocaleString()}*\n\n`;
-        text += `_Este presupuesto es informativo. Si tienes dudas, contáctanos._`;
-        
-        await sock.sendMessage(jid, { text });
-        await db.update(quotationsTable).set({ status: "sent" }).where(eq(quotationsTable.id, id));
+        logger.info({ jid, patientName: patient.name, sendToWhatsApp }, "Intentando enviar presupuesto por WhatsApp");
+
+        if (sock) {
+          let text = `*📄 PRESUPUESTO ACTUALIZADO - ${clinicName}*\n\n`;
+          text += `Estimado(a) *${patient.name}*,\nAdjuntamos el detalle del plan de tratamiento actualizado:\n\n`;
+          
+          quotation.items.forEach((item: any) => {
+            text += `▪️ ${item.service}: *$${item.price.toLocaleString()}*\n`;
+          });
+          
+          text += `\n*TOTAL ESTIMADO: $${quotation.total.toLocaleString()}*\n\n`;
+          text += `_Este presupuesto es informativo. Si tienes dudas, contáctanos._`;
+          
+          await sock.sendMessage(jid, { text });
+          await db.update(quotationsTable).set({ status: "sent" }).where(eq(quotationsTable.id, id));
+          logger.info({ id }, "Presupuesto enviado y estado actualizado");
+        } else {
+          logger.warn("No se pudo enviar WhatsApp: Socket no disponible");
+        }
       }
     } catch (err) {
       logger.error({ err }, "Error enviando presupuesto actualizado por WhatsApp");
