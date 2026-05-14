@@ -169,7 +169,16 @@ export default function Patients() {
                       <Pencil className="h-3.5 w-3.5 mr-1" />
                       Editar
                     </Button>
-                    <Button variant="outline" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(p.id)}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => {
+                        if (confirm(`¿Estás seguro de eliminar a ${p.name}? Se borrará toda su información y citas.`)) {
+                          handleDelete(p.id);
+                        }
+                      }}
+                    >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
@@ -211,7 +220,7 @@ export default function Patients() {
             </div>
             <div className="col-span-2 space-y-1">
               <Label>Tratamiento de interés</Label>
-              <Input value={form.treatment} onChange={e => setForm(f => ({ ...f, treatment: e.target.value }))} className="bg-background" placeholder="Ej: Implantes dentales" />
+              <Input value={form.treatment} onChange={e => setForm(f => ({ ...f, treatment: e.target.value }))} className="bg-background" placeholder="Ej: Implantes, Prótesis removible..." />
             </div>
             <div className="col-span-2 space-y-1">
               <Label>Notas</Label>

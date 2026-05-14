@@ -43,6 +43,10 @@ let _state: WAState = {
   botEnabled: true,
 };
 
+export const getWhatsAppSock = () => sock;
+export const getWhatsAppStatus = () => _state.status;
+
+
 export function getWAState(): WAState {
   return { ..._state };
 }

@@ -34,7 +34,29 @@ const triggerColors: Record<string, string> = {
 };
 
 type AutoForm = { name: string; trigger: string; message: string; delayHours: string; active: boolean };
-const emptyForm: AutoForm = { name: "", trigger: "appointment_reminder", message: "", delayHours: "", active: true };
+const emptyForm: AutoForm = { name: "", trigger: "appointment_reminder", message: "", delayHours: "24", active: true };
+
+const TEMPLATES = [
+  {
+    name: "Recordatorio 24h",
+    trigger: "appointment_reminder",
+    delayHours: "24",
+    message: "Hola {nombre}, te recordamos tu cita en Dientes Fijos Medellín para el día {fecha} a las {hora} ({tratamiento}). ¡Te esperamos!",
+  },
+  {
+    name: "Bienvenida",
+    trigger: "new_patient_welcome",
+    delayHours: "0",
+    message: "¡Hola {nombre}! Bienvenido(a) a Dientes Fijos Medellín. Es un gusto tenerte con nosotros. ¿En qué podemos ayudarte hoy?",
+  },
+  {
+    name: "Seguimiento Post-Cita",
+    trigger: "follow_up",
+    delayHours: "48",
+    message: "Hola {nombre}, esperamos que te sientas muy bien después de tu cita de {tratamiento}. ¡Cualquier duda estamos para servirte!",
+  }
+];
+
 
 export default function Automations() {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -176,9 +198,25 @@ export default function Automations() {
               />
               <p className="text-xs text-muted-foreground">Variables disponibles: {"{nombre}"}, {"{fecha}"}, {"{hora}"}, {"{tratamiento}"}</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="space-y-3 pt-2">
+              <Label className="text-xs text-muted-foreground uppercase tracking-wider">O usar una plantilla rápida</Label>
+              <div className="flex flex-wrap gap-2">
+                {TEMPLATES.map(t => (
+                  <Button
+                    key={t.name}
+                    variant="outline"
+                    size="sm"
+                    className="text-[10px] h-7 bg-background/50 hover:bg-accent/10"
+                    onClick={() => setForm({ ...t, active: true })}
+                  >
+                    {t.name}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 pt-2 border-t border-border/30 mt-4">
               <Switch checked={form.active} onCheckedChange={v => setForm(f => ({ ...f, active: v }))} />
-              <Label>Activa</Label>
+              <Label>Automatización Activa</Label>
             </div>
           </div>
           <DialogFooter>

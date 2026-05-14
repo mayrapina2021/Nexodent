@@ -44,7 +44,7 @@ const statusLabels: Record<string, string> = {
 
 const TREATMENTS = [
   "Implantes dentales", "Diseño de sonrisa", "Ortodoncia", "Blanqueamiento",
-  "Carillas", "Prótesis fija", "Valoración general", "Limpieza dental",
+  "Carillas", "Prótesis fija", "Prótesis removible", "Valoración general", "Limpieza dental",
   "Extracción", "Endodoncia", "Periodoncia",
 ];
 
@@ -64,7 +64,7 @@ const emptyForm: AppointmentForm = {
 };
 
 export default function Appointments() {
-  const [view, setView] = useState<"day" | "week">("week");
+  const [view, setView] = useState<"day" | "week" | "list">("week");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -159,9 +159,9 @@ export default function Appointments() {
           <p className="font-medium text-sm capitalize text-center">{formatDateLabel()}</p>
           <Button variant="ghost" size="icon" onClick={() => navigate(1)}><ChevronRight className="h-5 w-5" /></Button>
           <div className="flex gap-1 bg-background rounded-lg p-1 ml-auto">
-            {(["day", "week"] as const).map(v => (
+            {(["day", "week", "list"] as const).map(v => (
               <Button key={v} variant={view === v ? "default" : "ghost"} size="sm" onClick={() => setView(v)} className={view === v ? "bg-primary text-primary-foreground" : ""}>
-                {v === "day" ? "Día" : "Semana"}
+                {v === "day" ? "Día" : v === "week" ? "Semana" : "Lista"}
               </Button>
             ))}
           </div>
@@ -202,6 +202,61 @@ export default function Appointments() {
                 </CardContent>
               </Card>
             ))}
+          </div>
+        ) : view === "list" ? (
+          <div className="space-y-4">
+            {!(appointments?.length) ? (
+              <div className="text-center py-16 text-muted-foreground">
+                <p className="font-medium">No hay citas agendadas</p>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-border/50 bg-card/50 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border/50 bg-muted/30 text-muted-foreground uppercase text-[10px] tracking-wider">
+                      <th className="p-4 text-left font-semibold">Fecha / Hora</th>
+                      <th className="p-4 text-left font-semibold">Paciente</th>
+                      <th className="p-4 text-left font-semibold">Tratamiento</th>
+                      <th className="p-4 text-left font-semibold">Estado</th>
+                      <th className="p-4 text-right font-semibold">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/30">
+                    {(appointments ?? []).sort((a,b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime)).map(a => (
+                      <tr key={a.id} className="hover:bg-accent/5 transition-colors">
+                        <td className="p-4">
+                          <p className="font-medium">{new Date(a.date).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</p>
+                          <p className="text-xs text-muted-foreground">{to12h(a.startTime)}</p>
+                        </td>
+                        <td className="p-4">
+                          <p className="font-medium">{a.patientName}</p>
+                          <p className="text-xs text-muted-foreground">{a.patientPhone}</p>
+                        </td>
+                        <td className="p-4 text-muted-foreground">{a.treatment}</td>
+                        <td className="p-4">
+                          <Badge className={`text-[10px] h-5 ${statusColors[a.status] ?? ""}`}>{statusLabels[a.status] ?? a.status}</Badge>
+                        </td>
+                        <td className="p-4 text-right space-x-2">
+                          <Button variant="ghost" size="sm" onClick={() => openEdit(a)}>Editar</Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:bg-destructive/10"
+                            onClick={() => {
+                              if (confirm("¿Estás seguro de eliminar esta cita?")) {
+                                deleteAppointment.mutate({ id: a.id }, { onSuccess: () => { toast({ title: "Cita eliminada" }); invalidate(); } });
+                              }
+                            }}
+                          >
+                            Eliminar
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-7 gap-2">
@@ -289,11 +344,26 @@ export default function Appointments() {
               <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className="bg-background" rows={2} placeholder="Observaciones o indicaciones especiales..." />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={createAppointment.isPending || updateAppointment.isPending} className="bg-primary">
-              {editingId ? "Guardar cambios" : "Crear cita"}
-            </Button>
+          <DialogFooter className="flex justify-between items-center w-full">
+            {editingId && (
+              <Button
+                variant="ghost"
+                className="text-destructive hover:bg-destructive/10 mr-auto"
+                onClick={() => {
+                  if (confirm("¿Estás seguro de eliminar esta cita?")) {
+                    deleteAppointment.mutate({ id: editingId }, { onSuccess: () => { toast({ title: "Cita eliminada" }); setDialogOpen(false); invalidate(); } });
+                  }
+                }}
+              >
+                Eliminar Cita
+              </Button>
+            )}
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+              <Button onClick={handleSave} disabled={createAppointment.isPending || updateAppointment.isPending} className="bg-primary">
+                {editingId ? "Guardar cambios" : "Crear cita"}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
