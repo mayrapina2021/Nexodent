@@ -5,21 +5,37 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Load Font - in production it will be in dist/assets/
-const font = PImage.registerFont(path.join(__dirname, "assets/font.ttf"), "StandardFont");
-await new Promise<void>((resolve) => {
-  (font as any).load(() => resolve());
-});
-
+let fontLoaded = false;
+async function ensureFontLoaded() {
+  if (fontLoaded) return;
+  try {
+    const font = PImage.registerFont(path.join(__dirname, "assets/font.ttf"), "StandardFont");
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("Font loading timeout")), 5000);
+      (font as any).load(() => {
+        clearTimeout(timeout);
+        fontLoaded = true;
+        resolve();
+      });
+    });
+  } catch (err) {
+    console.error("Error loading font for quotations:", err);
+    // Continue anyway, maybe it works with system font fallback
+    fontLoaded = true; 
+  }
+}
 
 export async function generateQuotationImage(data: {
+
 
   clinicName: string;
   patientName: string;
   items: { service: string; price: number }[];
   total: number;
 }): Promise<Buffer> {
+  await ensureFontLoaded();
   const width = 800;
+
   const height = 1000;
   const img = PImage.make(width, height);
   const ctx = img.getContext("2d");
