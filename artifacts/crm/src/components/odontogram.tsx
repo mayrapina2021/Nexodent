@@ -52,8 +52,9 @@ const Tooth = ({ id, data, selectedTool, onUpdate, readonly }: ToothProps) => {
     <div className="flex flex-col items-center gap-0.5 group shrink-0">
       <span className="text-[9px] font-black text-slate-600 group-hover:text-indigo-600 transition-colors">{id}</span>
       <div className="relative w-9 h-9 cursor-pointer select-none" onClick={handleClickWhole}>
-        <svg viewBox="0 0 100 100" className={cn("w-full h-full transition-transform hover:scale-110", data.status !== "none" && data.status !== "fracture" && "opacity-40")}>
+        <svg viewBox="0 0 100 100" className={cn("w-full h-full transition-transform hover:scale-110", (data.status === "missing" || data.status === "extract") && "opacity-40")}>
           {/* Aumentamos strokeWidth para legibilidad */}
+
           <g strokeWidth="3">
             <path d="M10,10 L90,10 L75,25 L25,25 Z" onClick={(e) => { e.stopPropagation(); handleClickSurface("top"); }} className={cn("cursor-pointer transition-colors hover:fill-slate-200", getSurfaceColor("top"))} />
             <path d="M10,90 L90,90 L75,75 L25,75 Z" onClick={(e) => { e.stopPropagation(); handleClickSurface("bottom"); }} className={cn("cursor-pointer transition-colors hover:fill-slate-200", getSurfaceColor("bottom"))} />
@@ -83,10 +84,19 @@ const Tooth = ({ id, data, selectedTool, onUpdate, readonly }: ToothProps) => {
              <div className="w-full h-1 bg-red-600 rotate-[20deg]" />
           </div>
         )}
+        {data.status === "prosthesis" && (
+          <div className="absolute inset-0 border-4 border-indigo-500/50 rounded-sm pointer-events-none" />
+        )}
+        {data.status === "endodontics" && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+             <div className="w-1 h-full bg-red-600/80" />
+          </div>
+        )}
       </div>
     </div>
   );
 };
+
 
 export default function Odontogram({ data = {}, onChange, readonly }: any) {
   const [activeTab, setActiveTab] = useState("permanente");
