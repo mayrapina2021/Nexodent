@@ -546,7 +546,7 @@ function PersonalityTab({ toast }: { toast: any }) {
           </div>
           <div className="space-y-1">
             <Label>Rol / Descripción del asistente</Label>
-            <Textarea value={form.role ?? ""} onChange={e => setForm(f => ({ ...f, role: e.target.value }))} className="bg-background" rows={2} placeholder="Ej: Asistente virtual de Dientes Fijos Medellín, clínica especializada en implantes y estética dental" />
+            <Textarea value={form.role ?? ""} onChange={e => setForm(f => ({ ...f, role: e.target.value }))} className="bg-background" rows={2} placeholder="Ej: Asistente virtual de Nexodent, clínica especializada en gestión dental inteligente" />
           </div>
         </CardContent>
       </Card>

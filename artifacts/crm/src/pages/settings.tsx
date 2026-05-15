@@ -120,7 +120,7 @@ export default function Settings() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <Label>Nombre de la clínica</Label>
-                    <Input value={form.clinicName} onChange={e => setForm(f => ({ ...f, clinicName: e.target.value }))} className="bg-background" placeholder="Ej: Dientes Fijos Medellín" />
+                    <Input value={form.clinicName} onChange={e => setForm(f => ({ ...f, clinicName: e.target.value }))} className="bg-background" placeholder="Ej: Nexodent" />
                   </div>
                   <div className="space-y-1">
                     <Label>Teléfono de contacto</Label>
@@ -204,7 +204,7 @@ export default function Settings() {
                     value={form.aiSignature}
                     onChange={e => setForm(f => ({ ...f, aiSignature: e.target.value }))}
                     className="bg-background"
-                    placeholder="Asistente Virtual - Dientes Fijos Medellín"
+                    placeholder="Asistente Virtual - Nexodent"
                   />
                 </div>
               </CardContent>

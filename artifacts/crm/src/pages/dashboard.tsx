@@ -58,7 +58,7 @@ export default function Dashboard() {
       <div className="space-y-8">
         <div>
           <div className="flex items-center gap-4 mb-2">
-            <img src="/logo.jpg" alt="Dientes Fijos Medellín" className="h-16 md:h-24 w-auto object-contain" />
+            <img src="/logo.png" alt="Nexodent" className="h-16 md:h-24 w-auto object-contain" />
           </div>
           <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Panel de Control</p>
         </div>

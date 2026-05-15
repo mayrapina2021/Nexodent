@@ -41,13 +41,13 @@ const TEMPLATES = [
     name: "Recordatorio 24h",
     trigger: "appointment_reminder",
     delayHours: "24",
-    message: "Hola {nombre}, te recordamos tu cita en Dientes Fijos Medellín para el día {fecha} a las {hora} ({tratamiento}). ¡Te esperamos!",
+    message: "Hola {nombre}, te recordamos tu cita en Nexodent para el día {fecha} a las {hora} ({tratamiento}). ¡Te esperamos!",
   },
   {
     name: "Bienvenida",
     trigger: "new_patient_welcome",
     delayHours: "0",
-    message: "¡Hola {nombre}! Bienvenido(a) a Dientes Fijos Medellín. Es un gusto tenerte con nosotros. ¿En qué podemos ayudarte hoy?",
+    message: "¡Hola {nombre}! Bienvenido(a) a Nexodent. Es un gusto tenerte con nosotros. ¿En qué podemos ayudarte hoy?",
   },
   {
     name: "Seguimiento Post-Cita",

@@ -67,7 +67,7 @@ router.post("/clinical/quotations", async (req, res): Promise<void> => {
         const cleanPhone = patient.phone.replace(/\D/g, "");
         const finalPhone = (cleanPhone.length === 10 && cleanPhone.startsWith("3")) ? `57${cleanPhone}` : cleanPhone;
         const jid = `${finalPhone}@s.whatsapp.net`;
-        const clinicName = settings?.clinicName ?? "Dientes Fijos Medellín";
+        const clinicName = settings?.clinicName ?? "Nexodent";
         
         logger.info({ jid, patientName: patient.name }, "Generando imagen de presupuesto profesional");
 
@@ -111,7 +111,7 @@ router.patch("/clinical/quotations/:id", async (req, res): Promise<void> => {
         const cleanPhone = patient.phone.replace(/\D/g, "");
         const finalPhone = (cleanPhone.length === 10 && cleanPhone.startsWith("3")) ? `57${cleanPhone}` : cleanPhone;
         const jid = `${finalPhone}@s.whatsapp.net`;
-        const clinicName = settings?.clinicName ?? "Dientes Fijos Medellín";
+        const clinicName = settings?.clinicName ?? "Nexodent";
         
         if (sock) {
           const imageBuffer = await generateQuotationImage({
