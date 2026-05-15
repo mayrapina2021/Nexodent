@@ -7,9 +7,14 @@ import { Boom } from "@hapi/boom";
 import QRCode from "qrcode";
 import { db, conversationsTable, messagesTable, patientsTable, appointmentsTable, settingsTable } from "@workspace/db";
 import { eq, sql, and } from "drizzle-orm";
-import { generateAIResponse } from "./groq";
+import { generateAIResponse, transcribeAudio, generateVoiceURL } from "./groq";
 import { logger } from "./logger";
 import { usePostgresAuthState } from "./postgres-auth-state";
+import { downloadMediaMessage } from "@whiskeysockets/baileys";
+import fs from "fs";
+import path from "path";
+import tmp from "tmp";
+import ffmpeg from "fluent-ffmpeg";
 
 export interface WAState {
   connected: boolean;
@@ -198,40 +203,49 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo): Promise<void> 
     return;
   }
 
-  // Detectar si es un audio/nota de voz (PTT o audio normal)
-  const isAudio = !!msg.message?.audioMessage;
-
-  const text =
-    msg.message?.conversation ??
-    msg.message?.extendedTextMessage?.text ??
-    msg.message?.imageMessage?.caption ??
-    "";
-
-  // Si es audio, responder amablemente y salir
+  // Si es audio, transcribirlo primero
+  let processedText = text;
   if (isAudio) {
-    logger.info({ jid }, "Audio recibido — respondiendo con mensaje de texto");
-    const audioReplies = [
-      "¡Buen día! 😊 En Nexodent solo podemos recibir mensajes de texto por el momento. ¿Me podría escribir su consulta? Con mucho gusto le ayudaremos 🦷✨",
-      "¡Hola! 😊 Qué pena, en este canal de Nexodent solo manejamos mensajes de texto. ¿Me podría escribir lo que necesita? Con todo el gusto le atenderemos.",
-      "Hola, bienvenido(a) a Nexodent 🦷 Por ahora solo recibimos mensajes escritos por este medio. ¿Me cuenta en qué le podemos colaborar el día de hoy? 😊",
-    ];
-    const reply = audioReplies[Math.floor(Math.random() * audioReplies.length)];
-    if (sock) {
-      await sock.sendMessage(jid, { text: reply! });
-      logger.info({ jid }, "Respuesta automática de audio enviada");
+    try {
+      logger.info({ jid }, "Audio recibido — Iniciando transcripción...");
+      const buffer = await downloadMediaMessage(msg, "buffer", {});
+      const tmpFile = tmp.fileSync({ postfix: ".ogg" });
+      const mp3File = tmp.fileSync({ postfix: ".mp3" });
+      fs.writeFileSync(tmpFile.name, buffer as Buffer);
+
+      // Convertir OGG/OPUS de WhatsApp a MP3 para Whisper
+      await new Promise((resolve, reject) => {
+        ffmpeg(tmpFile.name)
+          .toFormat("mp3")
+          .on("end", resolve)
+          .on("error", reject)
+          .save(mp3File.name);
+      });
+
+      processedText = await transcribeAudio(mp3File.name);
+      logger.info({ jid, transcription: processedText }, "Transcripción completada");
+
+      tmpFile.removeCallback();
+      mp3File.removeCallback();
+
+      if (!processedText.trim()) {
+        await sock?.sendMessage(jid, { text: "No pude entender el audio, ¿me lo podrías repetir o escribir? 😊" });
+        return;
+      }
+    } catch (err) {
+      logger.error({ err }, "Error procesando audio de WhatsApp");
+      await sock?.sendMessage(jid, { text: "Tuve un problema técnico procesando tu audio, ¿me podrías escribir? 😊" });
+      return;
     }
-    return;
   }
 
-  if (!text.trim()) return;
+  if (!processedText.trim()) return;
 
-  // Strip @s.whatsapp.net and device suffix (e.g. "573001234567:5@s.whatsapp.net" → "573001234567")
   const phone = jid.split("@")[0].split(":")[0];
   const formattedPhone = phone.startsWith("+") ? phone : `+${phone}`;
   const pushName = msg.pushName ?? formattedPhone;
 
-  logger.info({ jid, text }, "Mensaje entrante de WhatsApp");
-
+  logger.info({ jid, text: processedText }, "Mensaje entrante de WhatsApp");
 
   try {
     let [conv] = await db.select().from(conversationsTable)
@@ -249,32 +263,31 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo): Promise<void> 
         aiMode: true,
         label: "patient",
         unreadCount: 1,
-        lastMessage: text,
+        lastMessage: processedText,
         lastMessageAt: new Date(),
       }).returning();
     }
 
     await db.insert(messagesTable).values({
       conversationId: conv.id,
-      content: text,
+      content: processedText,
       sender: "patient",
       read: false,
     });
 
     await db.update(conversationsTable).set({
-      lastMessage: text,
+      lastMessage: processedText,
       lastMessageAt: new Date(),
       unreadCount: sql`${conversationsTable.unreadCount} + 1`,
     }).where(eq(conversationsTable.id, conv.id));
 
-    // Refresh conversation data to ensure we have the most up-to-date AI mode
     const [latestConv] = await db.select().from(conversationsTable).where(eq(conversationsTable.id, conv.id));
     const aiEnabled = latestConv?.aiMode && _state.botEnabled;
 
     if (aiEnabled) {
       try {
         const availableSlots = await getAvailableSlots();
-        const aiResult = await generateAIResponse(conv.id, text, { availableSlots });
+        const aiResult = await generateAIResponse(conv.id, processedText, { availableSlots });
         const aiText = aiResult.message;
 
         if (aiText) {
@@ -290,17 +303,20 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo): Promise<void> 
             lastMessageAt: new Date(),
           }).where(eq(conversationsTable.id, conv.id));
 
-    if (sock) {
-      logger.info({ jid, status: _state.status }, "Intentando enviar respuesta IA a WhatsApp...");
-      try {
-        await sock.sendMessage(jid, { text: aiText });
-        logger.info({ jid, aiText }, "Respuesta IA enviada exitosamente a WhatsApp");
-      } catch (wsErr) {
-        logger.error({ wsErr, jid }, "Error al enviar mensaje a través de WhatsApp Socket");
-      }
-    } else {
-      logger.error({ jid, status: _state.status }, "CRÍTICO: No se pudo enviar mensaje porque 'sock' es null");
-    }
+          if (sock) {
+            // Si el paciente mandó audio, responder con audio + texto
+            if (isAudio) {
+              const voiceUrl = generateVoiceURL(aiText);
+              if (voiceUrl) {
+                await sock.sendMessage(jid, {
+                  audio: { url: voiceUrl },
+                  mimetype: "audio/mp4",
+                  ptt: true,
+                });
+              }
+            }
+            await sock.sendMessage(jid, { text: aiText });
+          }
         }
         
         const { registerPatient, bookAppointment, updatePhone } = aiResult.actions;

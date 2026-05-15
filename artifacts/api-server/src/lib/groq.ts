@@ -2,6 +2,8 @@ import Groq from "groq-sdk";
 import { db, settingsTable, conversationsTable, messagesTable, patientsTable, aiKnowledgeTable, aiPersonalityTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
+import fs from "fs";
+import * as googleTTS from "google-tts-api";
 
 let _groq: Groq | null = null;
 function getGroq(): Groq {
@@ -59,6 +61,37 @@ function to12h(time24: string): string {
   if (h === 0) h = 12;
   else if (h > 12) h -= 12;
   return `${h}:${m} ${ampm}`;
+}
+
+export async function transcribeAudio(filePath: string): Promise<string> {
+  try {
+    const groq = getGroq();
+    const transcription = await groq.audio.transcriptions.create({
+      file: fs.createReadStream(filePath),
+      model: "whisper-large-v3",
+      language: "es",
+    });
+    return transcription.text;
+  } catch (err) {
+    logger.error({ err }, "Error transcribiendo audio con Groq Whisper");
+    return "";
+  }
+}
+
+export function generateVoiceURL(text: string): string {
+  // Genera una URL de audio usando Google TTS (Gratis y natural)
+  // Limitado a 200 caracteres por segmento, pero suficiente para respuestas cortas de chat
+  try {
+    const url = googleTTS.getAudioUrl(text.slice(0, 200), {
+      lang: "es",
+      slow: false,
+      host: "https://translate.google.com",
+    });
+    return url;
+  } catch (err) {
+    logger.error({ err }, "Error generando URL de voz");
+    return "";
+  }
 }
 
 export async function generateAIResponse(
