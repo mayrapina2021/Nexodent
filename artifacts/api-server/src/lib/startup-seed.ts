@@ -6,10 +6,10 @@ const KNOWLEDGE = [
   {
     title: "Informacion general del consultorio",
     category: "general",
-    content: `Clinica: Dientes Fijos Medellin
+    content: `Clinica: Nexodent
 Especialidad: Odontologia estetica, rehabilitacion oral e implantes
 Horario: Lunes a Sabado de 8:00 a.m. a 6:00 p.m.
-Ubicacion: Medellin, Colombia
+Ubicacion: Colombia
 Politica de citas: Puntualidad requerida. Cancelaciones con minimo 24 horas de anticipacion.
 Formas de pago: Efectivo, transferencia bancaria, tarjetas debito y credito. Planes de pago disponibles.`,
   },
@@ -148,16 +148,16 @@ Duracion: 18-30 meses segun complejidad`,
 
 const PERSONALITY = {
   name: "Andrea",
-  role: "Asistente oficial de Dientes Fijos Medellin",
+  role: "Asistente oficial de Nexodent",
   mainGoal: "Ayudar a pacientes con informacion sobre tratamientos, precios y agendar citas",
-  tone: "calida, profesional, empatica, paisa antioquena",
-  language: "espanol colombiano antioqueno",
+  tone: "calida, profesional, empatica",
+  language: "espanol",
   dontRepeatGreeting: true,
   proactiveQuestions: true,
   suggestAppointments: true,
   maxResponseLength: "corta",
   escalateKeywords: "emergencia,urgencia,dolor fuerte,accidente,hemorragia,sangrado",
-  extraInstructions: "Nunca admitas ser un bot o IA. Eres Andrea, parte del equipo humano de Dientes Fijos Medellin. Usa voseo y calidez paisa. Siempre menciona el consultorio en el primer mensaje.",
+  extraInstructions: "Nunca admitas ser un bot o IA. Eres Andrea, parte del equipo humano de Nexodent. Siempre menciona el consultorio en el primer mensaje.",
 };
 
 export async function runStartupSeed(): Promise<void> {
@@ -165,13 +165,13 @@ export async function runStartupSeed(): Promise<void> {
 
   try {
     // ── Admin user ─────────────────────────────────────────────────────────
-    const adminEmail = "admin@dientesfijosmedellin.com";
+    const adminEmail = "admin@nexodent.com";
     const [existingUser] = await db.select().from(usersTable).where(eq(usersTable.email, adminEmail));
     if (!existingUser) {
       await db.insert(usersTable).values({
-        name: "Administrador",
+        name: "Administrador Nexodent",
         email: adminEmail,
-        passwordHash: "Dientes123",
+        passwordHash: "Nexodent123",
         role: "admin",
       });
       logger.info("Admin user created");

@@ -75,7 +75,7 @@ export async function generateAIResponse(
 
     const cfg = settings[0];
     const p = personality[0];
-    const clinicName = cfg?.clinicName ?? "Dientes Fijos Medellín";
+    const clinicName = cfg?.clinicName ?? "Nexodent";
     const { dateStr: colombiaDate, timeStr: colombiaTime, dayName: colombiaDay } = getColombiaNow();
 
     let patientContext = "";
@@ -195,7 +195,7 @@ export async function generateAIResponse(
     const assistantName = p?.name ?? "Andrea";
 
     const greetingInstruction = isFirstMessage
-      ? `PRIMER MENSAJE - OBLIGATORIO: Siempre menciona "Dientes Fijos Medellín" por nombre. Ejemplo: "Muy buen día. Bienvenido(a) a Dientes Fijos Medellín, soy ${assistantName}, su asistente. ¿En qué le puedo colaborar el día de hoy?"`
+      ? `PRIMER MENSAJE - OBLIGATORIO: Siempre menciona "Nexodent" por nombre. Ejemplo: "Muy buen día. Bienvenido(a) a Nexodent, soy ${assistantName}, su asistente. ¿En qué le puedo colaborar el día de hoy?"`
       : `Conversación activa - NO se presente de nuevo. Saludo de retorno: "Hola de nuevo. Es un gusto saludarle. ¿En qué puedo seguir ayudándole?"`;
 
     const systemPrompt = `Eres ${assistantName}, asistente oficial de ${clinicName}, Medellín. Eres una persona real del equipo — NUNCA digas que eres IA o bot.

@@ -31,7 +31,7 @@ app.use(
 );
 
 app.use(cors({
-  origin: ["https://dientesbot.web.app", "https://dientesbot.firebaseapp.com"],
+  origin: ["https://nexodent.web.app", "https://nexodent.firebaseapp.com"],
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],

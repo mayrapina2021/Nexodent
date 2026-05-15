@@ -211,9 +211,9 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo): Promise<void> 
   if (isAudio) {
     logger.info({ jid }, "Audio recibido — respondiendo con mensaje de texto");
     const audioReplies = [
-      "¡Buen día! 😊 En Dientes Fijos Medellín solo podemos recibir mensajes de texto por el momento. ¿Me podría escribir su consulta? Con mucho gusto le ayudaremos 🦷✨",
-      "¡Hola! 😊 Qué pena, en este canal de Dientes Fijos Medellín solo manejamos mensajes de texto. ¿Me podría escribir lo que necesita? Con todo el gusto le atenderemos.",
-      "Hola, bienvenido(a) a Dientes Fijos Medellín 🦷 Por ahora solo recibimos mensajes escritos por este medio. ¿Me cuenta en qué le podemos colaborar el día de hoy? 😊",
+      "¡Buen día! 😊 En Nexodent solo podemos recibir mensajes de texto por el momento. ¿Me podría escribir su consulta? Con mucho gusto le ayudaremos 🦷✨",
+      "¡Hola! 😊 Qué pena, en este canal de Nexodent solo manejamos mensajes de texto. ¿Me podría escribir lo que necesita? Con todo el gusto le atenderemos.",
+      "Hola, bienvenido(a) a Nexodent 🦷 Por ahora solo recibimos mensajes escritos por este medio. ¿Me cuenta en qué le podemos colaborar el día de hoy? 😊",
     ];
     const reply = audioReplies[Math.floor(Math.random() * audioReplies.length)];
     if (sock) {
@@ -447,7 +447,7 @@ export async function startWhatsApp(): Promise<void> {
     auth: authState,
     printQRInTerminal: false,
     logger: logger.child({ module: "baileys" }) as any,
-    browser: ["Dientes Fijos", "Chrome", "120.0.0"],
+    browser: ["Nexodent", "Chrome", "120.0.0"],
     connectTimeoutMs: 60000,
     defaultQueryTimeoutMs: 60000,
     keepAliveIntervalMs: 25000,

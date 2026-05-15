@@ -20,7 +20,8 @@ import { getAuthToken } from "@/lib/auth-token";
 
 // Configuración de la API en producción
 if (import.meta.env.PROD) {
-  setBaseUrl("https://dientesbot-api.onrender.com");
+  // NEXODENT: Actualizar esta URL con la URL real de Render después del despliegue
+  setBaseUrl(import.meta.env.VITE_API_URL ?? "https://nexodent-api.onrender.com");
 }
 
 // Token-based auth — bypasses all cross-origin cookie restrictions
