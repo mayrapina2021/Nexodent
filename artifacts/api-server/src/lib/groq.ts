@@ -5,7 +5,7 @@ import { logger } from "./logger";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { MsEdgeTTS, OUTPUT_FORMAT } from "ms-edge-tts";
+import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
 
 let _groq: Groq | null = null;
 function getGroq(): Groq {
@@ -102,10 +102,10 @@ export async function generateVoiceFile(text: string): Promise<string | null> {
       // Better: use the internal buffer or a promise wrapper if available
       // The ms-edge-tts library usually has a simpler way or we can pipe it
       const chunks: any[] = [];
-      const stream = tts.toStream(cleanText);
-      stream.on("data", (chunk) => chunks.push(chunk));
-      stream.on("end", () => resolve(Buffer.concat(chunks)));
-      stream.on("error", reject);
+      const streams = tts.toStream(cleanText);
+      streams.audioStream.on("data", (chunk) => chunks.push(chunk));
+      streams.audioStream.on("end", () => resolve(Buffer.concat(chunks)));
+      streams.audioStream.on("error", reject);
     });
 
     if (buffer && buffer.length > 0) {
@@ -122,14 +122,14 @@ export async function generateVoiceFile(text: string): Promise<string | null> {
       await tts.setMetadata("es-MX-JorgeNeural", OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
       
       const chunks: any[] = [];
-      const stream = tts.toStream(cleanText);
+      const streams = tts.toStream(cleanText);
       await new Promise<void>((resolve, reject) => {
-        stream.on("data", (chunk) => chunks.push(chunk));
-        stream.on("end", () => {
+        streams.audioStream.on("data", (chunk) => chunks.push(chunk));
+        streams.audioStream.on("end", () => {
           fs.writeFileSync(outFile, Buffer.concat(chunks));
           resolve();
         });
-        stream.on("error", reject);
+        streams.audioStream.on("error", reject);
       });
       return outFile;
     } catch (_) {

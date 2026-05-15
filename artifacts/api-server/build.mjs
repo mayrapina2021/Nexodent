@@ -106,7 +106,7 @@ async function buildAll() {
       "puppeteer",
       "puppeteer-core",
       "electron",
-      "ms-edge-tts",
+      "msedge-tts",
       "jszip",
     ],
     sourcemap: "linked",
