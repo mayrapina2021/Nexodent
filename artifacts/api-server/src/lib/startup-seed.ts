@@ -1,4 +1,4 @@
-import { db, usersTable, aiKnowledgeTable, aiPersonalityTable, appointmentsTable, patientsTable } from "@workspace/db";
+import { db, usersTable, aiKnowledgeTable, aiPersonalityTable, appointmentsTable, patientsTable, settingsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -199,6 +199,25 @@ export async function runStartupSeed(): Promise<void> {
         .set({ ...PERSONALITY, updatedAt: new Date() })
         .where(eq(aiPersonalityTable.id, existingP.id));
       logger.info("AI personality updated");
+    }
+
+    // ── Clinic Settings — force update branding ──────────────────────────
+    const [existingSettings] = await db.select().from(settingsTable);
+    const nexodentSettings = {
+      clinicName: "Nexodent",
+      aiGreetingMessage: "Hola, soy la asistente virtual de Nexodent. ¿En qué puedo ayudarte hoy?",
+      aiSignature: "Asistente Virtual - Nexodent",
+    };
+
+    if (!existingSettings) {
+      await db.insert(settingsTable).values(nexodentSettings);
+      logger.info("Clinic settings created");
+    } else {
+      // Always update to ensure branding is correct
+      await db.update(settingsTable)
+        .set(nexodentSettings)
+        .where(eq(settingsTable.id, existingSettings.id));
+      logger.info("Clinic settings updated to Nexodent");
     }
 
     // ── Sincronizar estados de pacientes con sus citas ───────────────────────

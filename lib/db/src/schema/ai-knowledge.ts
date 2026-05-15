@@ -15,8 +15,8 @@ export const aiKnowledgeTable = pgTable("ai_knowledge", {
 
 export const aiPersonalityTable = pgTable("ai_personality", {
   id: serial("id").primaryKey(),
-  name: text("name").notNull().default("Asistente Dientes Fijos"),
-  role: text("role").notNull().default("Asistente virtual de la clínica dental Dientes Fijos Medellín"),
+  name: text("name").notNull().default("Asistente Nexodent"),
+  role: text("role").notNull().default("Asistente virtual de Nexodent"),
   mainGoal: text("main_goal").notNull().default("Ayudar a los pacientes con información, resolver dudas y agendar citas para tratamientos dentales"),
   tone: text("tone").notNull().default("profesional, cálida y empática"),
   language: text("language").notNull().default("español colombiano"),

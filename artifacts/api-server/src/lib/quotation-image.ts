@@ -48,17 +48,22 @@ export async function generateQuotationImage(data: {
   ctx.fillStyle = "#0f172a";
   ctx.fillRect(0, 0, width, 150);
 
-  // Draw Logo if exists - in production it will be in dist/public/
+  // Draw Logo if exists
   try {
-    const logoPath = path.join(__dirname, "public/logo.jpg");
-    if (fs.existsSync(logoPath)) {
-       const stream = fs.createReadStream(logoPath);
+    const logoPngPath = path.join(__dirname, "public/logo.png");
+    const logoJpgPath = path.join(__dirname, "public/logo.jpg");
+    
+    if (fs.existsSync(logoPngPath)) {
+       const stream = fs.createReadStream(logoPngPath);
+       const logo = await PImage.decodePNGFromStream(stream);
+       ctx.drawImage(logo, 20, 20, 110, 110);
+    } else if (fs.existsSync(logoJpgPath)) {
+       const stream = fs.createReadStream(logoJpgPath);
        const logo = await PImage.decodeJPEGFromStream(stream);
-       // Center logo in header
        ctx.drawImage(logo, 20, 20, 110, 110);
     }
   } catch (e) {
-    // Ignore logo errors
+    console.error("Error drawing logo on quotation:", e);
   }
 
   // Header Text
