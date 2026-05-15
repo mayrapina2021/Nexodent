@@ -80,10 +80,10 @@ export default function Conversations() {
 
   return (
     <Layout>
-      <div className="h-[calc(100vh-8rem)] flex gap-0 rounded-xl overflow-hidden border border-border/50">
+      <div className="h-[calc(100vh-8rem)] flex gap-0 rounded-xl overflow-hidden border border-border/80 shadow-sm">
         {/* Lista de conversaciones */}
-        <div className="w-80 flex-shrink-0 bg-card/80 border-r border-border/50 flex flex-col">
-          <div className="p-4 border-b border-border/50">
+        <div className="w-80 flex-shrink-0 bg-sidebar border-r border-sidebar-border flex flex-col">
+          <div className="p-4 border-b border-sidebar-border">
             <h2 className="text-lg font-semibold mb-3">Chat Center</h2>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -142,7 +142,7 @@ export default function Conversations() {
             </div>
           </div>
         ) : (
-          <div className="flex-1 flex flex-col bg-background/20">
+          <div className="flex-1 flex flex-col bg-white/30 backdrop-blur-sm">
             {/* Encabezado del chat */}
             <div className="px-6 py-4 border-b border-border/50 bg-card/50 flex items-center justify-between">
               {detailLoading ? <Skeleton className="h-8 w-48" /> : (
