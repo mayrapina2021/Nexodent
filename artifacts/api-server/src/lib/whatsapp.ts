@@ -319,7 +319,7 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo): Promise<void> 
               if (voiceUrl) {
                 await sock.sendMessage(jid, {
                   audio: { url: voiceUrl },
-                  mimetype: "audio/mp4",
+                  mimetype: "audio/ogg; codecs=opus",
                   ptt: true,
                 });
               }
