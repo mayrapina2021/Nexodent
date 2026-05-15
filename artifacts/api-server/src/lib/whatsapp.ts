@@ -7,7 +7,7 @@ import { Boom } from "@hapi/boom";
 import QRCode from "qrcode";
 import { db, conversationsTable, messagesTable, patientsTable, appointmentsTable, settingsTable } from "@workspace/db";
 import { eq, sql, and } from "drizzle-orm";
-import { generateAIResponse, transcribeAudio, generateVoiceURL } from "./groq";
+import { generateAIResponse, transcribeAudio, generateVoiceFile } from "./groq";
 import { logger } from "./logger";
 import { usePostgresAuthState } from "./postgres-auth-state";
 import { downloadMediaMessage } from "@whiskeysockets/baileys";
@@ -313,18 +313,31 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo): Promise<void> 
           }).where(eq(conversationsTable.id, conv.id));
 
           if (sock) {
-            // Si el paciente mandó audio, responder con audio + texto
             if (isAudio) {
-              const voiceUrl = generateVoiceURL(aiText);
-              if (voiceUrl) {
-                await sock.sendMessage(jid, {
-                  audio: { url: voiceUrl },
-                  mimetype: "audio/ogg; codecs=opus",
-                  ptt: true,
-                });
+              // 🎙️ El paciente mandó AUDIO → Dante responde SOLO con voz (sin texto)
+              logger.info({ jid }, "Generando respuesta de voz con edge-tts...");
+              const voiceFile = await generateVoiceFile(aiText);
+              if (voiceFile) {
+                try {
+                  const audioBuffer = fs.readFileSync(voiceFile);
+                  await sock.sendMessage(jid, {
+                    audio: audioBuffer,
+                    mimetype: "audio/mpeg",
+                    ptt: true,
+                  });
+                  fs.unlinkSync(voiceFile); // limpiar archivo temporal
+                } catch (voiceErr) {
+                  logger.error({ voiceErr }, "Error enviando voz, enviando texto como fallback");
+                  await sock.sendMessage(jid, { text: aiText });
+                }
+              } else {
+                // Si edge-tts falla, enviar texto como fallback
+                await sock.sendMessage(jid, { text: aiText });
               }
+            } else {
+              // 💬 El paciente mandó TEXTO → Dante responde SOLO con texto
+              await sock.sendMessage(jid, { text: aiText });
             }
-            await sock.sendMessage(jid, { text: aiText });
           }
         }
         

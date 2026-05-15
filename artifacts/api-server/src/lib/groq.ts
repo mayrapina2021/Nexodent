@@ -3,7 +3,9 @@ import { db, settingsTable, conversationsTable, messagesTable, patientsTable, ai
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 import fs from "fs";
-import * as googleTTS from "google-tts-api";
+import os from "os";
+import path from "path";
+import { execFile } from "child_process";
 
 let _groq: Groq | null = null;
 function getGroq(): Groq {
@@ -78,17 +80,49 @@ export async function transcribeAudio(filePath: string): Promise<string> {
   }
 }
 
-export function generateVoiceURL(text: string): string {
+/**
+ * Genera un audio MP3 con voz masculina neural usando edge-tts.
+ * Voz: es-CO-GonzaloNeural (Colombia, masculino, muy natural)
+ * Retorna la ruta del archivo temporal generado, o null si falla.
+ */
+export async function generateVoiceFile(text: string): Promise<string | null> {
   try {
-    const url = googleTTS.getAudioUrl(text.slice(0, 200), {
-      lang: "es-US",
-      slow: false,
-      host: "https://translate.google.com",
+    const cleanText = text.slice(0, 500).replace(/[*_~`#]/g, "");
+    const outFile = path.join(os.tmpdir(), `dante_voice_${Date.now()}.mp3`);
+    
+    await new Promise<void>((resolve, reject) => {
+      execFile(
+        "edge-tts",
+        ["--voice", "es-CO-GonzaloNeural", "--text", cleanText, "--write-media", outFile],
+        { timeout: 15000 },
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
     });
-    return url;
+
+    if (fs.existsSync(outFile) && fs.statSync(outFile).size > 0) {
+      return outFile;
+    }
+    return null;
   } catch (err) {
-    logger.error({ err }, "Error generando URL de voz");
-    return "";
+    logger.error({ err }, "Error generando voz con edge-tts, intentando fallback...");
+    // Fallback: intentar con voz mexicana
+    try {
+      const cleanText = text.slice(0, 300).replace(/[*_~`#]/g, "");
+      const outFile = path.join(os.tmpdir(), `dante_voice_fallback_${Date.now()}.mp3`);
+      await new Promise<void>((resolve, reject) => {
+        execFile(
+          "edge-tts",
+          ["--voice", "es-MX-JorgeNeural", "--text", cleanText, "--write-media", outFile],
+          { timeout: 15000 },
+          (err) => { if (err) reject(err); else resolve(); }
+        );
+      });
+      if (fs.existsSync(outFile) && fs.statSync(outFile).size > 0) return outFile;
+    } catch (_) {}
+    return null;
   }
 }
 
