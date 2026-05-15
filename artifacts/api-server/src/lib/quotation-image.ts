@@ -7,7 +7,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Load Font - in production it will be in dist/assets/
 const font = PImage.registerFont(path.join(__dirname, "assets/font.ttf"), "StandardFont");
-await new Promise((resolve) => font.load(resolve));
+await new Promise<void>((resolve) => {
+  (font as any).load(() => resolve());
+});
+
 
 export async function generateQuotationImage(data: {
 
