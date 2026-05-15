@@ -12,80 +12,76 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { motion } from "framer-motion";
 import { saveAuthToken } from "@/lib/auth-token";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Float, MeshDistortMaterial, OrbitControls, Sphere, Torus } from "@react-three/drei";
+import { Float, OrbitControls, Environment, ContactShadows } from "@react-three/drei";
 import { useRef } from "react";
 import * as THREE from "three";
 
-// ── Animated 3D Tooth/Dental Scene ──────────────────────────────────────────
-function ToothCore() {
-  const mesh = useRef<THREE.Mesh>(null);
-  const ring1 = useRef<THREE.Mesh>(null);
-  const ring2 = useRef<THREE.Mesh>(null);
-
-  useFrame((state) => {
-    const t = state.clock.getElapsedTime();
-    if (mesh.current) {
-      mesh.current.rotation.y = t * 0.5;
-      mesh.current.rotation.x = Math.sin(t * 0.3) * 0.2;
-    }
-    if (ring1.current) ring1.current.rotation.x = t * 0.8;
-    if (ring2.current) ring2.current.rotation.z = t * 0.6;
-  });
-
+function Scene3D() {
   return (
-    <group>
-      {/* Core tooth body */}
-      <mesh ref={mesh}>
-        <capsuleGeometry args={[0.55, 0.9, 6, 32]} />
-        <MeshDistortMaterial
-          color="#60a5fa"
-          speed={3}
-          distort={0.25}
-          emissive="#1d4ed8"
-          emissiveIntensity={0.6}
-          roughness={0.05}
-          metalness={0.9}
-        />
-      </mesh>
-
-      {/* Orbit ring 1 */}
-      <mesh ref={ring1}>
-        <torusGeometry args={[1.6, 0.025, 16, 100]} />
-        <meshStandardMaterial color="#38bdf8" emissive="#0ea5e9" emissiveIntensity={1} />
-      </mesh>
-
-      {/* Orbit ring 2 */}
-      <mesh ref={ring2} rotation={[1.2, 0, 0]}>
-        <torusGeometry args={[1.9, 0.015, 16, 100]} />
-        <meshStandardMaterial color="#818cf8" emissive="#6366f1" emissiveIntensity={1} />
-      </mesh>
-
-      {/* Floating particles */}
-      {Array.from({ length: 8 }).map((_, i) => {
-        const angle = (i / 8) * Math.PI * 2;
-        return (
-          <Sphere key={i} args={[0.06, 8, 8]} position={[Math.cos(angle) * 2.2, Math.sin(angle * 0.5) * 0.4, Math.sin(angle) * 2.2]}>
-            <meshStandardMaterial color="#e0f2fe" emissive="#38bdf8" emissiveIntensity={2} />
-          </Sphere>
-        );
-      })}
-    </group>
+    <div className="w-full h-full">
+      <Canvas camera={{ position: [0, 0, 4], fov: 45 }}>
+        <ambientLight intensity={0.8} />
+        <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={2} />
+        <pointLight position={[-10, -10, -10]} color="#3b82f6" intensity={1} />
+        <Environment preset="city" />
+        <Float speed={1.5} rotationIntensity={0.5} floatIntensity={0.5}>
+          <ToothMolar />
+        </Float>
+        <ContactShadows position={[0, -1.5, 0]} opacity={0.4} scale={10} blur={2} far={4.5} />
+        <OrbitControls enableZoom={false} autoRotate={false} />
+      </Canvas>
+    </div>
   );
 }
 
-function Scene3D() {
+function ToothMolar() {
+  const groupRef = useRef<THREE.Group>(null);
+  useFrame((state) => {
+    if (groupRef.current) {
+      groupRef.current.rotation.y += 0.005;
+      groupRef.current.position.y = Math.sin(state.clock.getElapsedTime()) * 0.1;
+    }
+  });
+
+  const material = new THREE.MeshStandardMaterial({
+    color: "#ffffff",
+    roughness: 0.1,
+    metalness: 0.2,
+    emissive: "#ffffff",
+    emissiveIntensity: 0.05,
+  });
+
   return (
-    <Canvas camera={{ position: [0, 0, 5], fov: 45 }} gl={{ antialias: true }}>
-      <color attach="background" args={["#020617"]} />
-      <ambientLight intensity={0.3} />
-      <pointLight position={[5, 5, 5]} color="#60a5fa" intensity={3} />
-      <pointLight position={[-5, -5, -5]} color="#818cf8" intensity={2} />
-      <pointLight position={[0, 5, -5]} color="#34d399" intensity={1} />
-      <Float speed={2} rotationIntensity={0.5} floatIntensity={0.8}>
-        <ToothCore />
-      </Float>
-      <OrbitControls enableZoom={false} enablePan={false} autoRotate autoRotateSpeed={0.4} />
-    </Canvas>
+    <group ref={groupRef} scale={1.8}>
+      <mesh position={[0, 0.4, 0]}>
+        <boxGeometry args={[0.8, 0.6, 0.8]} />
+        <primitive object={material} attach="material" />
+      </mesh>
+      <mesh position={[0.2, 0.7, 0.2]}>
+        <sphereGeometry args={[0.25, 16, 16]} />
+        <primitive object={material} attach="material" />
+      </mesh>
+      <mesh position={[-0.2, 0.7, 0.2]}>
+        <sphereGeometry args={[0.25, 16, 16]} />
+        <primitive object={material} attach="material" />
+      </mesh>
+      <mesh position={[0.2, 0.7, -0.2]}>
+        <sphereGeometry args={[0.25, 16, 16]} />
+        <primitive object={material} attach="material" />
+      </mesh>
+      <mesh position={[-0.2, 0.7, -0.2]}>
+        <sphereGeometry args={[0.25, 16, 16]} />
+        <primitive object={material} attach="material" />
+      </mesh>
+      <mesh position={[0.2, -0.1, 0]} rotation={[0, 0, -0.2]}>
+        <cylinderGeometry args={[0.25, 0.1, 0.8, 16]} />
+        <primitive object={material} attach="material" />
+      </mesh>
+      <mesh position={[-0.2, -0.1, 0]} rotation={[0, 0, 0.2]}>
+        <cylinderGeometry args={[0.25, 0.1, 0.8, 16]} />
+        <primitive object={material} attach="material" />
+      </mesh>
+    </group>
   );
 }
 

@@ -79,11 +79,9 @@ export async function transcribeAudio(filePath: string): Promise<string> {
 }
 
 export function generateVoiceURL(text: string): string {
-  // Genera una URL de audio usando Google TTS (Gratis y natural)
-  // Limitado a 200 caracteres por segmento, pero suficiente para respuestas cortas de chat
   try {
     const url = googleTTS.getAudioUrl(text.slice(0, 200), {
-      lang: "es",
+      lang: "es-US",
       slow: false,
       host: "https://translate.google.com",
     });

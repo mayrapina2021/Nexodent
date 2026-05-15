@@ -150,8 +150,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const handleLogout = () => {
     clearAuthToken();
-    setLocation("/login");
-    logout.mutate(undefined, {});
+    logout.mutate(undefined, {
+      onSettled: () => {
+        window.location.href = "/login";
+      }
+    });
+    // Fallback inmediato
+    setTimeout(() => { window.location.href = "/login"; }, 100);
   };
 
   const isMoreActive = moreNav.some(item => location.startsWith(item.href));
