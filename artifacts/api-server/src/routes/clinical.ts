@@ -9,6 +9,8 @@ import {
 } from "@workspace/api-zod";
 import { getWhatsAppSock } from "../lib/whatsapp";
 import { logger } from "../lib/logger";
+import { generateQuotationImage } from "../lib/quotation-image";
+
 
 const router: IRouter = Router();
 
@@ -56,7 +58,7 @@ router.post("/clinical/quotations", async (req, res): Promise<void> => {
   const { sendToWhatsApp, ...data } = parsed.data;
   const [quotation] = await db.insert(quotationsTable).values(data).returning();
   
-  if (sendToWhatsApp) {
+  if (sendToWhatsApp && quotation) {
     try {
       const [patient] = await db.select().from(patientsTable).where(eq(patientsTable.id, data.patientId));
       const [settings] = await db.select().from(settingsTable).limit(1);
@@ -67,25 +69,21 @@ router.post("/clinical/quotations", async (req, res): Promise<void> => {
         const jid = `${finalPhone}@s.whatsapp.net`;
         const clinicName = settings?.clinicName ?? "Dientes Fijos Medellín";
         
-        logger.info({ jid, patientName: patient.name }, "Intentando enviar nuevo presupuesto por WhatsApp");
+        logger.info({ jid, patientName: patient.name }, "Generando imagen de presupuesto profesional");
 
         if (sock) {
-          // Formatear mensaje profesional
-          let text = `*📄 PRESUPUESTO - ${clinicName}*\n\n`;
-          text += `Estimado(a) *${patient.name}*,\nAdjuntamos el detalle del plan de tratamiento recomendado:\n\n`;
-          
-          data.items.forEach((item: any) => {
-            text += `▪️ ${item.service}: *$${item.price.toLocaleString()}*\n`;
+          const imageBuffer = await generateQuotationImage({
+            clinicName,
+            patientName: patient.name,
+            items: data.items,
+            total: data.total
           });
+
+          const caption = `*📄 PRESUPUESTO - ${clinicName}*\n\nEstimado(a) *${patient.name}*, adjuntamos su presupuesto solicitado. Quedamos atentos a cualquier duda.`;
           
-          text += `\n*TOTAL ESTIMADO: $${data.total.toLocaleString()}*\n\n`;
-          text += `_Este presupuesto es informativo. Si tienes dudas, contáctanos._`;
-          
-          await sock.sendMessage(jid, { text });
+          await sock.sendMessage(jid, { image: imageBuffer, caption });
           await db.update(quotationsTable).set({ status: "sent" }).where(eq(quotationsTable.id, quotation.id));
-          logger.info({ id: quotation.id }, "Nuevo presupuesto enviado y estado actualizado");
-        } else {
-          logger.warn("No se pudo enviar WhatsApp: Socket no disponible");
+          logger.info({ id: quotation.id }, "Presupuesto enviado como IMAGEN");
         }
       }
     } catch (err) {
@@ -111,29 +109,23 @@ router.patch("/clinical/quotations/:id", async (req, res): Promise<void> => {
       if (patient) {
         const sock = getWhatsAppSock();
         const cleanPhone = patient.phone.replace(/\D/g, "");
-        // Prepend 57 if it's a 10-digit Colombian number starting with 3
         const finalPhone = (cleanPhone.length === 10 && cleanPhone.startsWith("3")) ? `57${cleanPhone}` : cleanPhone;
         const jid = `${finalPhone}@s.whatsapp.net`;
         const clinicName = settings?.clinicName ?? "Dientes Fijos Medellín";
         
-        logger.info({ jid, patientName: patient.name, sendToWhatsApp }, "Intentando enviar presupuesto por WhatsApp");
-
         if (sock) {
-          let text = `*📄 PRESUPUESTO ACTUALIZADO - ${clinicName}*\n\n`;
-          text += `Estimado(a) *${patient.name}*,\nAdjuntamos el detalle del plan de tratamiento actualizado:\n\n`;
-          
-          quotation.items.forEach((item: any) => {
-            text += `▪️ ${item.service}: *$${item.price.toLocaleString()}*\n`;
+          const imageBuffer = await generateQuotationImage({
+            clinicName,
+            patientName: patient.name,
+            items: quotation.items,
+            total: quotation.total
           });
+
+          const caption = `*📄 PRESUPUESTO ACTUALIZADO - ${clinicName}*\n\nEstimado(a) *${patient.name}*, adjuntamos su presupuesto actualizado con los cambios realizados.`;
           
-          text += `\n*TOTAL ESTIMADO: $${quotation.total.toLocaleString()}*\n\n`;
-          text += `_Este presupuesto es informativo. Si tienes dudas, contáctanos._`;
-          
-          await sock.sendMessage(jid, { text });
+          await sock.sendMessage(jid, { image: imageBuffer, caption });
           await db.update(quotationsTable).set({ status: "sent" }).where(eq(quotationsTable.id, id));
-          logger.info({ id }, "Presupuesto enviado y estado actualizado");
-        } else {
-          logger.warn("No se pudo enviar WhatsApp: Socket no disponible");
+          logger.info({ id }, "Presupuesto actualizado enviado como IMAGEN");
         }
       }
     } catch (err) {
@@ -143,6 +135,7 @@ router.patch("/clinical/quotations/:id", async (req, res): Promise<void> => {
   
   res.json(quotation);
 });
+
 
 export default router;
 

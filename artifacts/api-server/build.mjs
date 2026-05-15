@@ -124,7 +124,26 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     `,
     },
   });
+
+  // Copy assets and public folders to dist
+  const fs = await import("node:fs/promises");
+  const assetsSrc = path.resolve(artifactDir, "src/assets");
+  const assetsDist = path.resolve(distDir, "assets");
+  const publicSrc = path.resolve(artifactDir, "../../crm/public");
+  const publicDist = path.resolve(distDir, "public");
+
+  try {
+    await fs.mkdir(assetsDist, { recursive: true });
+    await fs.copyFile(path.resolve(assetsSrc, "font.ttf"), path.resolve(assetsDist, "font.ttf"));
+    
+    await fs.mkdir(publicDist, { recursive: true });
+    await fs.copyFile(path.resolve(publicSrc, "logo.jpg"), path.resolve(publicDist, "logo.jpg"));
+    console.log("Assets and logo copied successfully to dist");
+  } catch (err) {
+    console.warn("Could not copy some assets, check if they exist:", err.message);
+  }
 }
+
 
 buildAll().catch((err) => {
   console.error(err);
