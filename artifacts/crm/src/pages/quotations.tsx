@@ -8,7 +8,7 @@ import {
   getListQuotationsQueryKey,
   customFetch
 } from "@workspace/api-client-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, FileText, Send, Trash2, Pencil } from "lucide-react";
 
@@ -41,6 +41,27 @@ export default function Quotations() {
   const updateQuotation = useUpdateQuotation();
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getListQuotationsQueryKey() });
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const pId = urlParams.get("patientId");
+    const itemsJson = urlParams.get("items");
+
+    if (pId) {
+      setSelectedPatientId(pId);
+      if (itemsJson) {
+        try {
+          const parsedItems = JSON.parse(decodeURIComponent(itemsJson));
+          setItems(parsedItems);
+        } catch (e) {
+          console.error("Error parsing items from URL", e);
+        }
+      }
+      setDialogOpen(true);
+      // Clean up URL without refreshing
+      window.history.replaceState({}, document.title, "/quotations");
+    }
+  }, []);
 
   const addItem = () => setItems([...items, { service: "", price: 0 }]);
   const removeItem = (idx: number) => setItems(items.filter((_, i) => i !== idx));

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, quotationsTable, evolutionNotesTable, patientsTable, settingsTable } from "@workspace/db";
+import { db, quotationsTable, evolutionNotesTable, patientsTable, settingsTable, odontogramsTable, consentFormsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import {
   CreateEvolutionNoteBody,
@@ -28,6 +28,58 @@ router.post("/clinical/evolution", async (req, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const [note] = await db.insert(evolutionNotesTable).values(parsed.data).returning();
   res.status(201).json(note);
+});
+
+// Odontograma
+router.get("/clinical/odontogram/:patientId", async (req, res): Promise<void> => {
+  const patientId = parseInt(req.params.patientId, 10);
+  const [odontogram] = await db.select().from(odontogramsTable)
+    .where(eq(odontogramsTable.patientId, patientId));
+  
+  if (!odontogram) {
+    res.json({ patientId, data: {}, updatedAt: new Date() });
+    return;
+  }
+  res.json(odontogram);
+});
+
+router.put("/clinical/odontogram/:patientId", async (req, res): Promise<void> => {
+  const patientId = parseInt(req.params.patientId, 10);
+  const { data } = req.body;
+  
+  const [existing] = await db.select().from(odontogramsTable).where(eq(odontogramsTable.patientId, patientId));
+  
+  if (existing) {
+    const [updated] = await db.update(odontogramsTable)
+      .set({ data, updatedAt: new Date() })
+      .where(eq(odontogramsTable.id, existing.id))
+      .returning();
+    res.json(updated);
+  } else {
+    const [created] = await db.insert(odontogramsTable)
+      .values({ patientId, data })
+      .returning();
+    res.status(201).json(created);
+  }
+});
+
+// Consentimientos
+router.get("/clinical/consent/:patientId", async (req, res): Promise<void> => {
+  const patientId = parseInt(req.params.patientId, 10);
+  const forms = await db.select().from(consentFormsTable)
+    .where(eq(consentFormsTable.patientId, patientId))
+    .orderBy(desc(consentFormsTable.createdAt));
+  res.json(forms);
+});
+
+router.post("/clinical/consent", async (req, res): Promise<void> => {
+  const { patientId, type } = req.body;
+  const [form] = await db.insert(consentFormsTable)
+    .values({ patientId, type, status: "pending" })
+    .returning();
+  
+  // Opcional: Enviar WhatsApp con link de firma (placeholder por ahora)
+  res.status(201).json(form);
 });
 
 // Presupuestos

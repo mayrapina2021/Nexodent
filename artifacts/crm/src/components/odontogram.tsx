@@ -1,225 +1,156 @@
-import React, { useState } from "react";
+import React from "react";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-type Surface = "top" | "bottom" | "left" | "right" | "center";
-type Status = "missing" | "extract" | "fracture" | "prosthesis" | "endodontics" | "none";
+// FDI Notation: 11-18, 21-28, 31-38, 41-48 (Adults)
+const ADULT_TEETH_UPPER = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
+const ADULT_TEETH_LOWER = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38];
 
-interface ToothData {
-  surfaces: Record<Surface, "red" | "blue" | "none">;
-  status: Status;
+export type ToothStatus = "healthy" | "cavity" | "filling" | "missing" | "crown" | "extraction" | "endodontics";
+
+export interface ToothData {
+  status: ToothStatus;
+  surfaces: string[]; // 'top', 'bottom', 'left', 'right', 'center'
 }
 
-interface ToothProps {
-  id: number;
-  data: ToothData;
-  selectedTool: string;
-  onUpdate: (id: number, updated: ToothData) => void;
-  readonly?: boolean;
+interface OdontogramProps {
+  data: Record<string, ToothData>;
+  onChange: (toothId: string, data: ToothData) => void;
+  readOnly?: boolean;
 }
 
-const Tooth = ({ id, data, selectedTool, onUpdate, readonly }: ToothProps) => {
-  const handleClickSurface = (s: Surface) => {
-    if (readonly) return;
-    
-    const wholeToothTools = ["missing", "extract", "fracture", "prosthesis", "endodontics"];
-    if (wholeToothTools.includes(selectedTool)) {
-      handleClickWhole();
-      return;
-    }
+const STATUS_COLORS: Record<ToothStatus, string> = {
+  healthy: "bg-slate-100 dark:bg-slate-800",
+  cavity: "bg-red-500",
+  filling: "bg-blue-500",
+  missing: "bg-slate-400",
+  crown: "bg-yellow-500",
+  extraction: "bg-purple-500",
+  endodontics: "bg-green-500",
+};
 
-    const newData = { ...data, surfaces: { ...data.surfaces } };
-    if (selectedTool === "caries") newData.surfaces[s] = "red";
-    else if (selectedTool === "filling") newData.surfaces[s] = "blue";
-    else if (selectedTool === "none") newData.surfaces[s] = "none";
-    
-    onUpdate(id, newData);
+const Tooth = ({ id, data, onUpdate, readOnly }: { id: number, data?: ToothData, onUpdate: (d: ToothData) => void, readOnly?: boolean }) => {
+  const currentData = data || { status: "healthy", surfaces: [] };
+
+  const toggleSurface = (surface: string) => {
+    if (readOnly) return;
+    const newSurfaces = currentData.surfaces.includes(surface)
+      ? currentData.surfaces.filter(s => s !== surface)
+      : [...currentData.surfaces, surface];
+    onUpdate({ ...currentData, surfaces: newSurfaces });
   };
 
-  const handleClickWhole = () => {
-    if (readonly) return;
-    const currentStatus = data.status === selectedTool ? "none" : (selectedTool as Status);
-    onUpdate(id, { ...data, status: currentStatus });
-  };
-
-  const getSurfaceColor = (s: Surface) => {
-    const val = data.surfaces[s];
-    if (val === "red") return "fill-red-500 stroke-red-700";
-    if (val === "blue") return "fill-blue-500 stroke-blue-700";
-    return "fill-transparent stroke-slate-400";
+  const setStatus = (status: ToothStatus) => {
+    if (readOnly) return;
+    onUpdate({ ...currentData, status });
   };
 
   return (
-    <div className="flex flex-col items-center gap-0.5 group shrink-0">
-      <span className="text-[9px] font-black text-slate-600 group-hover:text-indigo-600 transition-colors">{id}</span>
-      <div className="relative w-9 h-9 cursor-pointer select-none" onClick={handleClickWhole}>
-        <svg viewBox="0 0 100 100" className={cn("w-full h-full transition-transform hover:scale-110", (data.status === "missing" || data.status === "extract") && "opacity-40")}>
-          {/* Aumentamos strokeWidth para legibilidad */}
-
-          <g strokeWidth="3">
-            <path d="M10,10 L90,10 L75,25 L25,25 Z" onClick={(e) => { e.stopPropagation(); handleClickSurface("top"); }} className={cn("cursor-pointer transition-colors hover:fill-slate-200", getSurfaceColor("top"))} />
-            <path d="M10,90 L90,90 L75,75 L25,75 Z" onClick={(e) => { e.stopPropagation(); handleClickSurface("bottom"); }} className={cn("cursor-pointer transition-colors hover:fill-slate-200", getSurfaceColor("bottom"))} />
-            <path d="M10,10 L10,90 L25,75 L25,25 Z" onClick={(e) => { e.stopPropagation(); handleClickSurface("left"); }} className={cn("cursor-pointer transition-colors hover:fill-slate-200", getSurfaceColor("left"))} />
-            <path d="M90,10 L90,90 L75,75 L75,25 Z" onClick={(e) => { e.stopPropagation(); handleClickSurface("right"); }} className={cn("cursor-pointer transition-colors hover:fill-slate-200", getSurfaceColor("right"))} />
-            <rect x="25" y="25" width="50" height="50" onClick={(e) => { e.stopPropagation(); handleClickSurface("center"); }} className={cn("cursor-pointer transition-colors hover:fill-slate-200", getSurfaceColor("center"))} />
-          </g>
-        </svg>
-        
-        {data.status === "missing" && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none p-1">
-             <svg viewBox="0 0 100 100" className="w-full h-full text-red-600">
-                <line x1="0" y1="0" x2="100" y2="100" stroke="currentColor" strokeWidth="8" />
-                <line x1="100" y1="0" x2="0" y2="100" stroke="currentColor" strokeWidth="8" />
-             </svg>
-          </div>
+    <div className="flex flex-col items-center gap-1">
+      <span className="text-[10px] font-bold text-muted-foreground">{id}</span>
+      <Popover>
+        <PopoverTrigger asChild>
+          <button className={cn(
+            "relative w-8 h-8 border-2 rounded-sm transition-all hover:scale-110",
+            currentData.status === "missing" ? "opacity-30" : "opacity-100"
+          )}>
+            {/* Surfaces */}
+            <div 
+              onClick={(e) => { e.stopPropagation(); toggleSurface("top"); }}
+              className={cn("absolute top-0 left-0 right-0 h-1/4 border-b", currentData.surfaces.includes("top") ? STATUS_COLORS[currentData.status] : "bg-transparent")} 
+            />
+            <div 
+              onClick={(e) => { e.stopPropagation(); toggleSurface("bottom"); }}
+              className={cn("absolute bottom-0 left-0 right-0 h-1/4 border-t", currentData.surfaces.includes("bottom") ? STATUS_COLORS[currentData.status] : "bg-transparent")} 
+            />
+            <div 
+              onClick={(e) => { e.stopPropagation(); toggleSurface("left"); }}
+              className={cn("absolute top-0 left-0 bottom-0 w-1/4 border-r", currentData.surfaces.includes("left") ? STATUS_COLORS[currentData.status] : "bg-transparent")} 
+            />
+            <div 
+              onClick={(e) => { e.stopPropagation(); toggleSurface("right"); }}
+              className={cn("absolute top-0 right-0 bottom-0 w-1/4 border-l", currentData.surfaces.includes("right") ? STATUS_COLORS[currentData.status] : "bg-transparent")} 
+            />
+            <div 
+              onClick={(e) => { e.stopPropagation(); toggleSurface("center"); }}
+              className={cn("absolute top-1/4 left-1/4 right-1/4 bottom-1/4", currentData.surfaces.includes("center") ? STATUS_COLORS[currentData.status] : "bg-transparent")} 
+            />
+            
+            {/* Status Icons for whole tooth */}
+            {currentData.status === "extraction" && <div className="absolute inset-0 flex items-center justify-center text-red-500 font-bold">X</div>}
+            {currentData.status === "missing" && <div className="absolute inset-0 flex items-center justify-center text-slate-500">?</div>}
+          </button>
+        </PopoverTrigger>
+        {!readOnly && (
+          <PopoverContent className="w-48 p-2">
+            <div className="grid grid-cols-1 gap-1">
+              {(Object.keys(STATUS_COLORS) as ToothStatus[]).map(s => (
+                <Button 
+                  key={s} 
+                  variant="ghost" 
+                  size="sm" 
+                  className="justify-start gap-2"
+                  onClick={() => setStatus(s)}
+                >
+                  <div className={cn("w-3 h-3 rounded-full", STATUS_COLORS[s])} />
+                  <span className="capitalize">{s === 'healthy' ? 'Sano' : s === 'cavity' ? 'Caries' : s === 'filling' ? 'Obturación' : s === 'missing' ? 'Ausente' : s === 'crown' ? 'Corona' : s === 'extraction' ? 'Exodoncia' : 'Endodoncia'}</span>
+                </Button>
+              ))}
+            </div>
+          </PopoverContent>
         )}
-        {data.status === "extract" && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none p-1">
-             <svg viewBox="0 0 100 100" className="w-full h-full text-blue-600">
-                <line x1="0" y1="0" x2="100" y2="100" stroke="currentColor" strokeWidth="8" />
-             </svg>
-          </div>
-        )}
-        {data.status === "fracture" && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-             <div className="w-full h-1 bg-red-600 rotate-[20deg]" />
-          </div>
-        )}
-        {data.status === "prosthesis" && (
-          <div className="absolute inset-0 border-4 border-indigo-500/50 rounded-sm pointer-events-none" />
-        )}
-        {data.status === "endodontics" && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-             <div className="w-1 h-full bg-red-600/80" />
-          </div>
-        )}
-      </div>
+      </Popover>
     </div>
   );
 };
 
-
-export default function Odontogram({ data = {}, onChange, readonly }: any) {
-  const [activeTab, setActiveTab] = useState("permanente");
-  const [selectedTool, setSelectedTool] = useState("caries");
-
-  const upperTeeth = [
-    [18, 17, 16, 15, 14, 13, 12, 11],
-    [21, 22, 23, 24, 25, 26, 27, 28]
-  ];
-  const lowerTeeth = [
-    [48, 47, 46, 45, 44, 43, 42, 41],
-    [31, 32, 33, 34, 35, 36, 37, 38]
-  ];
-
-  const handleUpdate = (id: number, toothData: ToothData) => {
-    if (readonly) return;
-    onChange(id, toothData);
-  };
-
-  const getToothData = (id: number): ToothData => {
-    return data[id] || { surfaces: { top: "none", bottom: "none", left: "none", right: "none", center: "none" }, status: "none" };
-  };
-
+export const Odontogram = ({ data, onChange, readOnly }: OdontogramProps) => {
   return (
-    <div className="w-full bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col">
-      {/* Header Compacto */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/50">
-        <div className="flex bg-white p-0.5 rounded-lg border border-slate-200 shadow-sm">
-          {["permanente", "temporal", "mixta"].map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={cn(
-                "px-4 py-1.5 rounded-md text-[10px] font-black uppercase transition-all",
-                activeTab === tab ? "bg-indigo-600 text-white shadow-sm" : "text-slate-400 hover:bg-slate-50"
-              )}
-            >
-              {tab}
-            </button>
+    <div className="flex flex-col gap-8 p-6 overflow-x-auto bg-card rounded-xl border shadow-sm">
+      <div className="flex flex-col gap-2">
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-2">Arcada Superior</h3>
+        <div className="flex gap-2 min-w-max pb-2">
+          {ADULT_TEETH_UPPER.map(id => (
+            <Tooth 
+              key={id} 
+              id={id} 
+              data={data[id.toString()]} 
+              onUpdate={(d) => onChange(id.toString(), d)} 
+              readOnly={readOnly}
+            />
           ))}
-        </div>
-        {!readonly && (
-           <div className="flex gap-1">
-             {["caries", "filling", "none"].map((t) => (
-               <button 
-                 key={t}
-                 onClick={() => setSelectedTool(t)}
-                 className={cn(
-                    "px-3 py-1 rounded-full text-[9px] font-bold border transition-all",
-                    selectedTool === t ? "bg-indigo-50 border-indigo-200 text-indigo-700" : "bg-white text-slate-500"
-                 )}
-               >
-                 {t === "caries" ? "REQUERIDO" : t === "filling" ? "REALIZADO" : "CARACTERÍSTICAS"}
-               </button>
-             ))}
-           </div>
-        )}
-      </div>
-
-      {/* Area del Odontograma - Con scroll controlado */}
-      <div className="p-4 overflow-x-auto overflow-y-hidden scrollbar-hide">
-        <div className="flex flex-col gap-8 min-w-fit mx-auto">
-          {/* Upper Arch */}
-          <div className="flex justify-center gap-4 border-b border-slate-50 pb-8">
-            <div className="flex gap-1.5">
-              {upperTeeth[0].map(id => (
-                <Tooth key={id} id={id} data={getToothData(id)} selectedTool={selectedTool} onUpdate={handleUpdate} readonly={readonly} />
-              ))}
-            </div>
-            <div className="w-px bg-slate-200 self-stretch" />
-            <div className="flex gap-1.5">
-              {upperTeeth[1].map(id => (
-                <Tooth key={id} id={id} data={getToothData(id)} selectedTool={selectedTool} onUpdate={handleUpdate} readonly={readonly} />
-              ))}
-            </div>
-          </div>
-          
-          {/* Lower Arch */}
-          <div className="flex justify-center gap-4">
-            <div className="flex gap-1.5">
-              {lowerTeeth[0].map(id => (
-                <Tooth key={id} id={id} data={getToothData(id)} selectedTool={selectedTool} onUpdate={handleUpdate} readonly={readonly} />
-              ))}
-            </div>
-            <div className="w-px bg-slate-200 self-stretch" />
-            <div className="flex gap-1.5">
-              {lowerTeeth[1].map(id => (
-                <Tooth key={id} id={id} data={getToothData(id)} selectedTool={selectedTool} onUpdate={handleUpdate} readonly={readonly} />
-              ))}
-            </div>
-          </div>
         </div>
       </div>
 
-      {/* Barra de Herramientas Compacta */}
-      {!readonly && (
-        <div className="p-3 bg-slate-50 border-t border-slate-100 grid grid-cols-4 md:grid-cols-8 gap-2">
-          {[
-            { id: "caries", label: "Caries", symbol: "🔴" },
-            { id: "filling", label: "Obturado", symbol: "🔵" },
-            { id: "missing", label: "Ausente", symbol: "❌" },
-            { id: "extract", label: "Extracción", symbol: "⚡" },
-            { id: "fracture", label: "Fractura", symbol: "〰️" },
-            { id: "prosthesis", label: "Prótesis", symbol: "🦷" },
-            { id: "endodontics", label: "Endo", symbol: "📍" },
-            { id: "none", label: "Borrar", symbol: "🧹" },
-          ].map((tool) => (
-            <button
-              key={tool.id}
-              onClick={() => setSelectedTool(tool.id)}
-              className={cn(
-                "flex flex-col items-center justify-center p-1.5 rounded-lg border transition-all gap-0.5",
-                selectedTool === tool.id 
-                  ? "bg-white border-indigo-500 text-indigo-700 shadow-sm" 
-                  : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
-              )}
-            >
-              <span className="text-xs">{tool.symbol}</span>
-              <span className="text-[8px] font-bold uppercase">{tool.label}</span>
-            </button>
+      <div className="h-px bg-border w-full" />
+
+      <div className="flex flex-col gap-2">
+        <div className="flex gap-2 min-w-max pt-2">
+          {ADULT_TEETH_LOWER.map(id => (
+            <Tooth 
+              key={id} 
+              id={id} 
+              data={data[id.toString()]} 
+              onUpdate={(d) => onChange(id.toString(), d)} 
+              readOnly={readOnly}
+            />
           ))}
         </div>
-      )}
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-2 text-right">Arcada Inferior</h3>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-4 p-4 bg-muted/50 rounded-lg border border-dashed">
+        <div className="text-xs font-medium text-muted-foreground w-full mb-1">Leyenda de estados:</div>
+        {Object.entries(STATUS_COLORS).map(([status, color]) => (
+          <div key={status} className="flex items-center gap-2">
+            <div className={cn("w-3 h-3 rounded-full", color)} />
+            <span className="text-[11px] capitalize">{status === 'healthy' ? 'Sano' : status === 'cavity' ? 'Caries' : status === 'filling' ? 'Obturación' : status === 'missing' ? 'Ausente' : status === 'crown' ? 'Corona' : status === 'extraction' ? 'Exodoncia' : 'Endodoncia'}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
-}
+};

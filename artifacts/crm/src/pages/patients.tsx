@@ -1,5 +1,6 @@
 import Layout from "@/components/layout";
 import { useListPatients, useCreatePatient, useUpdatePatient, useDeletePatient, getListPatientsQueryKey } from "@workspace/api-client-react";
+import { useLocation } from "wouter";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, Pencil, Trash2, Phone, Mail, Calendar, ClipboardList } from "lucide-react";
@@ -53,6 +54,7 @@ const emptyForm: PatientForm = {
 
 
 export default function Patients() {
+  const [, setLocation] = useLocation();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -211,10 +213,10 @@ export default function Patients() {
                       variant="secondary" 
                       size="sm" 
                       className="w-full bg-accent/10 text-accent hover:bg-accent/20 border-accent/20"
-                      onClick={() => setClinicalPatient(p)}
+                      onClick={() => setLocation(`/clinical/${p.id}`)}
                     >
                       <ClipboardList className="h-3.5 w-3.5 mr-1" />
-                      Ficha Clínica
+                      Historia Clínica
                     </Button>
                   </div>
 

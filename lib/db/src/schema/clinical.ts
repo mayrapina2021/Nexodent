@@ -17,3 +17,20 @@ export const evolutionNotesTable = pgTable("evolution_notes", {
   doctorName: text("doctor_name"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+export const odontogramsTable = pgTable("odontograms", {
+  id: serial("id").primaryKey(),
+  patientId: integer("patient_id").notNull().references(() => patientsTable.id, { onDelete: "cascade" }),
+  data: jsonb("data").notNull().$type<Record<string, { status: string; notes?: string; surfaces?: string[] }>>(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const consentFormsTable = pgTable("consent_forms", {
+  id: serial("id").primaryKey(),
+  patientId: integer("patient_id").notNull().references(() => patientsTable.id, { onDelete: "cascade" }),
+  type: text("type").notNull(), // extraccion, implante, general, etc.
+  status: text("status").notNull().default("pending"), // pending, signed, rejected
+  signatureUrl: text("signature_url"),
+  signedAt: timestamp("signed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});

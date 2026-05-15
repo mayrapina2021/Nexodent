@@ -13,6 +13,8 @@ import Automations from "@/pages/automations";
 import Settings from "@/pages/settings";
 import AITraining from "@/pages/ai-training";
 import Quotations from "@/pages/quotations";
+import ClinicalHistory from "@/pages/clinical-history";
+import Inventory from "@/pages/inventory";
 
 
 import { setBaseUrl, setAuthTokenGetter } from "@workspace/api-client-react";
@@ -49,6 +51,8 @@ function Router() {
       <Route path="/settings" component={Settings} />
       <Route path="/ai-training" component={AITraining} />
       <Route path="/quotations" component={Quotations} />
+      <Route path="/clinical/:patientId" component={ClinicalHistory} />
+      <Route path="/inventory" component={Inventory} />
       <Route path="/" component={Dashboard} />
 
       <Route component={NotFound} />

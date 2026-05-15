@@ -14,6 +14,7 @@ import {
   MoreHorizontal,
   X,
   FileText,
+  Package,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { cn } from "@/lib/utils";
@@ -35,6 +36,7 @@ const moreNav = [
   { href: "/whatsapp", label: "WhatsApp", icon: Smartphone },
   { href: "/automations", label: "Automatizaciones", icon: Workflow },
   { href: "/ai-training", label: "Entrenar IA", icon: Brain },
+  { href: "/inventory", label: "Inventario", icon: Package },
   { href: "/settings", label: "Configuración", icon: SettingsIcon },
 ];
 
