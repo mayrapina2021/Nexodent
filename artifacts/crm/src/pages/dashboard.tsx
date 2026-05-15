@@ -8,20 +8,20 @@ import { Badge } from "@/components/ui/badge";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 
 const statCards = [
-  { key: "totalPatients", label: "Total Pacientes", icon: Users, color: "text-blue-400", bg: "bg-blue-500/10" },
-  { key: "appointmentsToday", label: "Citas Hoy", icon: CalendarCheck, color: "text-green-400", bg: "bg-green-500/10" },
-  { key: "pendingMessages", label: "Mensajes Pendientes", icon: MessageSquare, color: "text-yellow-400", bg: "bg-yellow-500/10" },
-  { key: "confirmedAppointments", label: "Citas Confirmadas", icon: CheckCircle, color: "text-emerald-400", bg: "bg-emerald-500/10" },
-  { key: "newPatientsThisMonth", label: "Nuevos Este Mes", icon: UserPlus, color: "text-purple-400", bg: "bg-purple-500/10" },
-  { key: "activeConversations", label: "Conversaciones Activas", icon: MessageCircle, color: "text-cyan-400", bg: "bg-cyan-500/10" },
+  { key: "totalPatients", label: "Total Pacientes", icon: Users, color: "text-blue-600", bg: "bg-blue-100" },
+  { key: "appointmentsToday", label: "Citas Hoy", icon: CalendarCheck, color: "text-green-600", bg: "bg-green-100" },
+  { key: "pendingMessages", label: "Mensajes Pendientes", icon: MessageSquare, color: "text-amber-600", bg: "bg-amber-100" },
+  { key: "confirmedAppointments", label: "Citas Confirmadas", icon: CheckCircle, color: "text-emerald-600", bg: "bg-emerald-100" },
+  { key: "newPatientsThisMonth", label: "Nuevos Este Mes", icon: UserPlus, color: "text-purple-600", bg: "bg-purple-100" },
+  { key: "activeConversations", label: "Conversaciones Activas", icon: MessageCircle, color: "text-cyan-600", bg: "bg-cyan-100" },
 ];
 
 const statusColors: Record<string, string> = {
-  scheduled: "bg-blue-500/20 text-blue-300",
-  confirmed: "bg-green-500/20 text-green-300",
-  completed: "bg-gray-500/20 text-gray-300",
-  cancelled: "bg-red-500/20 text-red-300",
-  no_show: "bg-orange-500/20 text-orange-300",
+  scheduled: "bg-blue-100 text-blue-700",
+  confirmed: "bg-green-100 text-green-700",
+  completed: "bg-gray-100 text-gray-700",
+  cancelled: "bg-red-100 text-red-700",
+  no_show: "bg-orange-100 text-orange-700",
 };
 
 const statusLabels: Record<string, string> = {

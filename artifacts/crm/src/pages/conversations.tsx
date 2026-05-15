@@ -181,14 +181,14 @@ export default function Conversations() {
                 <div key={msg.id} className={cn("flex", msg.sender === "patient" ? "justify-start" : "justify-end")}>
                   <div className={cn(
                     "max-w-xs lg:max-w-md rounded-2xl px-4 py-2.5 text-sm",
-                    msg.sender === "patient" ? "bg-card border border-border/50 text-foreground rounded-tl-sm" :
-                    msg.sender === "ai" ? "bg-accent/20 border border-accent/30 text-foreground rounded-tr-sm" :
-                    "bg-primary text-primary-foreground rounded-tr-sm"
+                    msg.sender === "patient" ? "bg-white border border-border/50 text-foreground rounded-tl-sm shadow-sm" :
+                    msg.sender === "ai" ? "bg-amber-50 border border-amber-200 text-amber-900 rounded-tr-sm shadow-sm" :
+                    "bg-primary text-primary-foreground rounded-tr-sm shadow-md"
                   )}>
                     {msg.sender === "ai" && (
                       <div className="flex items-center gap-1 mb-1">
-                        <Bot className="h-3 w-3 text-accent" />
-                        <span className="text-xs text-accent font-medium">Asistente IA</span>
+                        <Bot className="h-3 w-3 text-amber-600" />
+                        <span className="text-xs text-amber-600 font-medium">Asistente IA</span>
                       </div>
                     )}
                     {msg.sender === "agent" && (

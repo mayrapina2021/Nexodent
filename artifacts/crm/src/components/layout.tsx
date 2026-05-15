@@ -50,13 +50,13 @@ function ToothFloat() {
       <mesh ref={mesh}>
         <capsuleGeometry args={[0.9, 1.4, 8, 32]} />
         <meshStandardMaterial
-          color="#1e40af"
-          emissive="#3b82f6"
-          emissiveIntensity={0.4}
-          roughness={0.1}
-          metalness={0.95}
+          color="#d4d4d8"
+          emissive="#a1a1aa"
+          emissiveIntensity={0.2}
+          roughness={0.2}
+          metalness={0.8}
           transparent
-          opacity={0.85}
+          opacity={0.9}
         />
       </mesh>
 
@@ -64,18 +64,18 @@ function ToothFloat() {
       {[[-0.4, 0.9, 0.2], [0.4, 0.9, 0.2], [0, 0.95, -0.3], [-0.35, 0.88, -0.2], [0.35, 0.88, -0.2]].map((pos, i) => (
         <mesh key={i} position={pos as [number, number, number]}>
           <sphereGeometry args={[0.2, 16, 16]} />
-          <meshStandardMaterial color="#2563eb" emissive="#60a5fa" emissiveIntensity={0.5} roughness={0.05} metalness={0.9} transparent opacity={0.9} />
+          <meshStandardMaterial color="#e4e4e7" emissive="#f4f4f5" emissiveIntensity={0.3} roughness={0.1} metalness={0.7} transparent opacity={0.9} />
         </mesh>
       ))}
 
       {/* Orbit rings */}
       <mesh ref={ring1}>
         <torusGeometry args={[2.5, 0.02, 16, 100]} />
-        <meshStandardMaterial color="#38bdf8" emissive="#0ea5e9" emissiveIntensity={1.5} transparent opacity={0.6} />
+        <meshStandardMaterial color="#94a3b8" emissive="#64748b" emissiveIntensity={0.5} transparent opacity={0.4} />
       </mesh>
       <mesh ref={ring2} rotation={[1.0, 0.3, 0]}>
         <torusGeometry args={[3.2, 0.015, 16, 100]} />
-        <meshStandardMaterial color="#818cf8" emissive="#6366f1" emissiveIntensity={1.5} transparent opacity={0.4} />
+        <meshStandardMaterial color="#cbd5e1" emissive="#94a3b8" emissiveIntensity={0.5} transparent opacity={0.3} />
       </mesh>
 
       {/* Floating particles */}
@@ -96,10 +96,10 @@ function ToothFloat() {
 function AnimatedBg() {
   return (
     <Canvas camera={{ position: [0, 0, 7], fov: 50 }} className="pointer-events-none">
-      <color attach="background" args={["#030712"]} />
-      <ambientLight intensity={0.2} />
-      <pointLight position={[10, 10, 10]} color="#3b82f6" intensity={5} />
-      <pointLight position={[-10, -5, -10]} color="#6366f1" intensity={3} />
+      <color attach="background" args={["#fdfcf8"]} />
+      <ambientLight intensity={0.6} />
+      <pointLight position={[10, 10, 10]} color="#fef3c7" intensity={2} />
+      <pointLight position={[-10, -5, -10]} color="#e0f2fe" intensity={1.5} />
       <pointLight position={[0, -10, 5]} color="#0ea5e9" intensity={2} />
       <Float speed={1.5} rotationIntensity={0.3} floatIntensity={0.5}>
         <ToothFloat />
@@ -142,7 +142,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   if (isLoading || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "#030712" }}>
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <Skeleton className="w-12 h-12 rounded-full" />
       </div>
     );

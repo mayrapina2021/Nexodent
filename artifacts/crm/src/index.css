@@ -74,46 +74,46 @@
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
 
-  --background: 210 20% 98%;
-  --foreground: 222 47% 11%;
-  --border: 220 15% 88%;
-  --input: 220 15% 82%;
-  --ring: 226 48% 26%;
+  --background: 35 40% 97%;
+  --foreground: 222 20% 15%;
+  --border: 35 20% 88%;
+  --input: 35 20% 84%;
+  --ring: 226 48% 35%;
 
   --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
-  --card-border: 220 15% 90%;
+  --card-foreground: 222 20% 15%;
+  --card-border: 35 20% 90%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 222 47% 11%;
-  --popover-border: 220 15% 88%;
+  --popover-foreground: 222 20% 15%;
+  --popover-border: 35 20% 88%;
 
-  /* Navy Blue from Logo */
-  --primary: 226 48% 26%;
+  /* Soft Navy / Dental Blue */
+  --primary: 226 48% 35%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 210 20% 94%;
-  --secondary-foreground: 220 20% 30%;
+  --secondary: 35 30% 92%;
+  --secondary-foreground: 35 15% 30%;
 
-  --muted: 210 18% 95%;
-  --muted-foreground: 220 12% 50%;
+  --muted: 35 20% 94%;
+  --muted-foreground: 35 10% 45%;
 
-  /* Lime Green from Logo */
-  --accent: 142 71% 45%;
+  /* Sand/Gold Accent */
+  --accent: 30 70% 45%;
   --accent-foreground: 0 0% 100%;
 
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
 
-  /* Sidebar — using the Navy Blue for brand consistency */
-  --sidebar: 226 48% 18%;
-  --sidebar-foreground: 210 20% 90%;
-  --sidebar-border: 226 48% 24%;
-  --sidebar-primary: 142 71% 45%;
+  /* Sidebar — Lighter Cream */
+  --sidebar: 35 30% 93%;
+  --sidebar-foreground: 222 20% 20%;
+  --sidebar-border: 35 20% 86%;
+  --sidebar-primary: 226 48% 35%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 226 48% 25%;
-  --sidebar-accent-foreground: 210 20% 92%;
-  --sidebar-ring: 142 71% 45%;
+  --sidebar-accent: 35 20% 88%;
+  --sidebar-accent-foreground: 222 20% 15%;
+  --sidebar-ring: 226 48% 35%;
 
   --chart-1: 226 48% 26%;
   --chart-2: 142 71% 45%;
@@ -160,48 +160,44 @@
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .09);
 
-  /* Deep midnight background */
-  --background: 222 47% 4%;
-  --foreground: 210 30% 92%;
-  --border: 220 30% 16%;
-  --input: 220 30% 14%;
-  --ring: 213 94% 60%;
+  /* Earth Midnight for dark mode */
+  --background: 35 20% 8%;
+  --foreground: 35 15% 90%;
+  --border: 35 15% 18%;
+  --input: 35 15% 16%;
+  --ring: 30 70% 50%;
 
-  /* Glassmorphism cards */
-  --card: 220 40% 7%;
-  --card-foreground: 210 25% 90%;
-  --card-border: 220 30% 15%;
+  --card: 35 20% 10%;
+  --card-foreground: 35 10% 88%;
+  --card-border: 35 15% 18%;
 
-  --popover: 222 40% 8%;
-  --popover-foreground: 210 25% 90%;
-  --popover-border: 220 30% 16%;
+  --popover: 35 20% 12%;
+  --popover-foreground: 35 10% 88%;
+  --popover-border: 35 15% 20%;
 
-  /* Electric blue primary */
-  --primary: 213 94% 50%;
-  --primary-foreground: 0 0% 100%;
+  --primary: 226 60% 65%;
+  --primary-foreground: 35 20% 10%;
 
-  --secondary: 220 35% 12%;
-  --secondary-foreground: 210 20% 78%;
+  --secondary: 35 15% 15%;
+  --secondary-foreground: 35 10% 80%;
 
-  --muted: 220 30% 10%;
-  --muted-foreground: 220 15% 52%;
+  --muted: 35 15% 12%;
+  --muted-foreground: 35 10% 55%;
 
-  /* Cyan-teal accent */
-  --accent: 186 94% 42%;
+  --accent: 30 70% 55%;
   --accent-foreground: 0 0% 100%;
 
   --destructive: 0 65% 52%;
   --destructive-foreground: 0 0% 100%;
 
-  /* Deep navy sidebar */
-  --sidebar: 224 60% 5%;
-  --sidebar-foreground: 210 20% 78%;
-  --sidebar-border: 220 40% 12%;
-  --sidebar-primary: 213 94% 55%;
+  --sidebar: 35 25% 6%;
+  --sidebar-foreground: 35 10% 80%;
+  --sidebar-border: 35 20% 15%;
+  --sidebar-primary: 226 60% 65%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 222 50% 12%;
-  --sidebar-accent-foreground: 210 20% 88%;
-  --sidebar-ring: 213 94% 55%;
+  --sidebar-accent: 35 20% 14%;
+  --sidebar-accent-foreground: 35 10% 90%;
+  --sidebar-ring: 30 70% 55%;
 
   --chart-1: 213 94% 55%;
   --chart-2: 186 94% 42%;
