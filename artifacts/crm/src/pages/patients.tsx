@@ -1,9 +1,9 @@
 import Layout from "@/components/layout";
-import { useListPatients, useCreatePatient, useUpdatePatient, useDeletePatient, getListPatientsQueryKey } from "@workspace/api-client-react";
+import { useListPatients, useCreatePatient, useUpdatePatient, useDeletePatient, getListPatientsQueryKey, useListTreatments } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Pencil, Trash2, Phone, Mail, Calendar, ClipboardList } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Phone, Mail, Calendar, ClipboardList, ChevronDown } from "lucide-react";
 import PatientClinicalDialog from "@/components/patient-clinical-dialog";
 
 import { Button } from "@/components/ui/button";
@@ -20,19 +20,23 @@ import { useToast } from "@/hooks/use-toast";
 const statusColors: Record<string, string> = {
   new: "bg-blue-500/20 text-blue-300 border-blue-500/30",
   interested: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
+  to_schedule: "bg-orange-500/20 text-orange-300 border-orange-500/30",
   scheduled: "bg-purple-500/20 text-purple-300 border-purple-500/30",
   attended: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30",
   in_treatment: "bg-green-500/20 text-green-300 border-green-500/30",
   completed: "bg-gray-500/20 text-gray-300 border-gray-500/30",
+  lost: "bg-red-500/20 text-red-300 border-red-500/30",
 };
 
 const statusLabels: Record<string, string> = {
-  new: "Nuevo",
+  new: "Nuevo Contacto",
   interested: "Interesado",
+  to_schedule: "Por Agendar",
   scheduled: "Cita Agendada",
-  attended: "Atendido",
+  attended: "Atendido / Valoración",
   in_treatment: "En Tratamiento",
   completed: "Finalizado",
+  lost: "No Interesado / Perdido",
 };
 
 type PatientForm = {
@@ -73,6 +77,7 @@ export default function Patients() {
   const { data: patients, isLoading } = useListPatients(params, {
     query: { queryKey: getListPatientsQueryKey(params) }
   });
+  const { data: treatments } = useListTreatments();
   const createPatient = useCreatePatient();
   const updatePatient = useUpdatePatient();
   const deletePatient = useDeletePatient();
@@ -228,11 +233,12 @@ export default function Patients() {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="bg-card border-border">
-          <DialogHeader>
+        <DialogContent className="bg-card border-border max-w-2xl max-h-[90vh] flex flex-col p-0">
+          <DialogHeader className="p-6 pb-2">
             <DialogTitle>{editingId ? "Editar Paciente" : "Nuevo Paciente"}</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-2">
+          <div className="flex-1 overflow-y-auto px-6 py-2 custom-scrollbar">
+            <div className="grid grid-cols-2 gap-4 py-2">
             <div className="col-span-2 space-y-1">
               <Label>Nombre completo *</Label>
               <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="bg-background" placeholder="Ej: Juan Pérez" />
@@ -258,7 +264,19 @@ export default function Patients() {
             </div>
             <div className="col-span-2 space-y-1">
               <Label>Tratamiento de interés</Label>
-              <Input value={form.treatment} onChange={e => setForm(f => ({ ...f, treatment: e.target.value }))} className="bg-background" placeholder="Ej: Implantes, Prótesis removible..." />
+              <Select value={form.treatment} onValueChange={v => setForm(f => ({ ...f, treatment: v }))}>
+                <SelectTrigger className="bg-background">
+                  <SelectValue placeholder="Selecciona un tratamiento..." />
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
+                  {treatments?.map(t => (
+                    <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                  ))}
+                  <SelectItem value="Limpieza">Limpieza</SelectItem>
+                  <SelectItem value="Valoración">Valoración</SelectItem>
+                  <SelectItem value="Urgencia">Urgencia</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="col-span-2 space-y-1">
               <Label>Notas Generales</Label>
@@ -291,9 +309,10 @@ export default function Patients() {
                 </div>
               </div>
             </div>
+            </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="p-6 pt-2 border-t border-border/30">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleSave} disabled={createPatient.isPending || updatePatient.isPending} className="bg-primary">
               {editingId ? "Guardar cambios" : "Crear paciente"}

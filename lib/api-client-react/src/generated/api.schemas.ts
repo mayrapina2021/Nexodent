@@ -83,10 +83,12 @@ export type PatientStatus = (typeof PatientStatus)[keyof typeof PatientStatus];
 export const PatientStatus = {
   new: "new",
   interested: "interested",
+  to_schedule: "to_schedule",
   scheduled: "scheduled",
   attended: "attended",
   in_treatment: "in_treatment",
   completed: "completed",
+  lost: "lost",
 } as const;
 
 export interface Patient {
@@ -113,10 +115,12 @@ export type CreatePatientBodyStatus =
 export const CreatePatientBodyStatus = {
   new: "new",
   interested: "interested",
+  to_schedule: "to_schedule",
   scheduled: "scheduled",
   attended: "attended",
   in_treatment: "in_treatment",
   completed: "completed",
+  lost: "lost",
 } as const;
 
 export interface CreatePatientBody {
@@ -137,10 +141,12 @@ export type UpdatePatientBodyStatus =
 export const UpdatePatientBodyStatus = {
   new: "new",
   interested: "interested",
+  to_schedule: "to_schedule",
   scheduled: "scheduled",
   attended: "attended",
   in_treatment: "in_treatment",
   completed: "completed",
+  lost: "lost",
 } as const;
 
 export interface UpdatePatientBody {

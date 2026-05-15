@@ -141,16 +141,20 @@ export const ListPatientsResponseItem = zod.object({
   status: zod.enum([
     "new",
     "interested",
+    "to_schedule",
     "scheduled",
     "attended",
     "in_treatment",
     "completed",
+    "lost",
   ]),
   lastVisit: zod.coerce.date().nullish(),
   nextAppointment: zod.coerce.date().nullish(),
   notes: zod.string().nullish(),
   medicalHistory: zod.string().nullish(),
   treatmentPrice: zod.number().nullish(),
+  diagnosis: zod.string().nullish(),
+  odontogram: zod.any().nullish(),
   createdAt: zod.coerce.date(),
 });
 export const ListPatientsResponse = zod.array(ListPatientsResponseItem);
@@ -168,15 +172,19 @@ export const CreatePatientBody = zod.object({
     .enum([
       "new",
       "interested",
+      "to_schedule",
       "scheduled",
       "attended",
       "in_treatment",
       "completed",
+      "lost",
     ])
     .optional(),
   notes: zod.string().optional(),
   medicalHistory: zod.string().optional(),
   treatmentPrice: zod.number().optional(),
+  diagnosis: zod.string().optional(),
+  odontogram: zod.any().optional(),
 });
 
 /**
@@ -196,16 +204,20 @@ export const GetPatientResponse = zod.object({
   status: zod.enum([
     "new",
     "interested",
+    "to_schedule",
     "scheduled",
     "attended",
     "in_treatment",
     "completed",
+    "lost",
   ]),
   lastVisit: zod.coerce.date().nullish(),
   nextAppointment: zod.coerce.date().nullish(),
   notes: zod.string().nullish(),
   medicalHistory: zod.string().nullish(),
   treatmentPrice: zod.number().nullish(),
+  diagnosis: zod.string().nullish(),
+  odontogram: zod.any().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -226,15 +238,19 @@ export const UpdatePatientBody = zod.object({
     .enum([
       "new",
       "interested",
+      "to_schedule",
       "scheduled",
       "attended",
       "in_treatment",
       "completed",
+      "lost",
     ])
     .optional(),
   notes: zod.string().optional(),
   medicalHistory: zod.string().optional(),
   treatmentPrice: zod.number().optional(),
+  diagnosis: zod.string().optional(),
+  odontogram: zod.any().optional(),
 });
 
 export const UpdatePatientResponse = zod.object({
@@ -247,16 +263,20 @@ export const UpdatePatientResponse = zod.object({
   status: zod.enum([
     "new",
     "interested",
+    "to_schedule",
     "scheduled",
     "attended",
     "in_treatment",
     "completed",
+    "lost",
   ]),
   lastVisit: zod.coerce.date().nullish(),
   nextAppointment: zod.coerce.date().nullish(),
   notes: zod.string().nullish(),
   medicalHistory: zod.string().nullish(),
   treatmentPrice: zod.number().nullish(),
+  diagnosis: zod.string().nullish(),
+  odontogram: zod.any().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -477,16 +497,20 @@ export const GetConversationResponse = zod.object({
       status: zod.enum([
         "new",
         "interested",
+        "to_schedule",
         "scheduled",
         "attended",
         "in_treatment",
         "completed",
+        "lost",
       ]),
       lastVisit: zod.coerce.date().nullish(),
       nextAppointment: zod.coerce.date().nullish(),
       notes: zod.string().nullish(),
       medicalHistory: zod.string().nullish(),
       treatmentPrice: zod.number().nullish(),
+      diagnosis: zod.string().nullish(),
+      odontogram: zod.any().nullish(),
       createdAt: zod.coerce.date(),
     })
     .nullish(),

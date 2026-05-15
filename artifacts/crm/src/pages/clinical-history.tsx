@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Plus, Save, History, FileText, ClipboardList, ReceiptText, FileDown } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -45,7 +45,7 @@ export default function ClinicalHistory() {
 
   const { data: notes } = useQuery({
     queryKey: ["notes", patientId],
-    queryFn: () => listEvolutionNotes(patientId),
+    queryFn: () => listEvolutionNotes({ patientId }),
     enabled: !!patientId,
   });
 
@@ -103,9 +103,9 @@ export default function ClinicalHistory() {
       tipo_reporte: "RIPS_CONSULTA",
       prestador: "Nexodent Clinic",
       paciente: {
-        id: patient.id,
-        nombre: patient.name,
-        identificacion: patient.phone // Placeholder for real ID
+        id: patient?.id,
+        nombre: patient?.name,
+        identificacion: patient?.phone // Placeholder for real ID
       },
       consultas: notes?.map(n => ({
         fecha: format(new Date(n.createdAt), "dd/MM/yyyy"),
@@ -133,7 +133,7 @@ export default function ClinicalHistory() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Historia Clínica</h1>
             <p className="text-muted-foreground">
-              Paciente: <span className="font-semibold text-foreground">{patient.name}</span> • ID: {patient.id}
+              Paciente: <span className="font-semibold text-foreground">{patient?.name}</span> • ID: {patient?.id}
             </p>
           </div>
           <div className="flex gap-2">

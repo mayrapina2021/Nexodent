@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useUpdatePatient, useListEvolutionNotes, useCreateEvolutionNote } from "@workspace/api-client-react";
 
-import Odontogram from "./odontogram";
+import { Odontogram } from "./odontogram";
 import { useToast } from "@/hooks/use-toast";
 import { History, Activity, ClipboardList, Stethoscope } from "lucide-react";
 
@@ -89,7 +89,7 @@ export default function PatientClinicalDialog({ patient, open, onOpenChange }: P
             <TabsContent value="odontogram" className="m-0 space-y-4">
               <Odontogram 
                 data={odontogram} 
-                onChange={(id: number, state: any) => setOdontogram(prev => ({ ...prev, [id]: state }))} 
+                onChange={(id: string, state: any) => setOdontogram(prev => ({ ...prev, [id]: state }))} 
               />
               <div className="flex justify-end">
                 <Button onClick={handleSaveOdontogram} disabled={updatePatient.isPending}>Guardar Odontograma</Button>
