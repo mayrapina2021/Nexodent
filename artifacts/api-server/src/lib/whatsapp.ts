@@ -203,12 +203,21 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo): Promise<void> 
     return;
   }
 
+  // Detectar si es un audio/nota de voz (PTT o audio normal)
+  const isAudio = !!msg.message?.audioMessage;
+
+  const text =
+    msg.message?.conversation ??
+    msg.message?.extendedTextMessage?.text ??
+    msg.message?.imageMessage?.caption ??
+    "";
+
   // Si es audio, transcribirlo primero
   let processedText = text;
   if (isAudio) {
     try {
       logger.info({ jid }, "Audio recibido — Iniciando transcripción...");
-      const buffer = await downloadMediaMessage(msg, "buffer", {});
+      const buffer = await downloadMediaMessage(msg, "buffer", {}, { logger: logger as any, reuploadRequest: (sock as any).updateMediaMessage });
       const tmpFile = tmp.fileSync({ postfix: ".ogg" });
       const mp3File = tmp.fileSync({ postfix: ".mp3" });
       fs.writeFileSync(tmpFile.name, buffer as Buffer);
