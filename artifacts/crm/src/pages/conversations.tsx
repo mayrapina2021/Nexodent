@@ -142,7 +142,7 @@ export default function Conversations() {
             </div>
           </div>
         ) : (
-          <div className="flex-1 flex flex-col bg-white/30 backdrop-blur-sm">
+          <div className="flex-1 flex flex-col bg-secondary/30 backdrop-blur-sm">
             {/* Encabezado del chat */}
             <div className="px-6 py-4 border-b border-border/50 bg-card/50 flex items-center justify-between">
               {detailLoading ? <Skeleton className="h-8 w-48" /> : (

@@ -96,10 +96,10 @@ function ToothFloat() {
 function AnimatedBg() {
   return (
     <Canvas camera={{ position: [0, 0, 7], fov: 50 }} className="pointer-events-none">
-      <color attach="background" args={["#fdfcf8"]} />
-      <ambientLight intensity={0.6} />
-      <pointLight position={[10, 10, 10]} color="#fef3c7" intensity={2} />
-      <pointLight position={[-10, -5, -10]} color="#e0f2fe" intensity={1.5} />
+      <color attach="background" args={["#eeeae1"]} />
+      <ambientLight intensity={0.5} />
+      <pointLight position={[10, 10, 10]} color="#fff7ed" intensity={1.5} />
+      <pointLight position={[-10, -5, -10]} color="#f0f9ff" intensity={1} />
       <pointLight position={[0, -10, 5]} color="#0ea5e9" intensity={2} />
       <Float speed={1.5} rotationIntensity={0.3} floatIntensity={0.5}>
         <ToothFloat />

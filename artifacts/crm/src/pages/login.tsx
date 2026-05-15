@@ -76,8 +76,8 @@ function ToothCore() {
 function Scene3D() {
   return (
     <Canvas camera={{ position: [0, 0, 5], fov: 45 }} gl={{ antialias: true }}>
-      <color attach="background" args={["#fdfcf8"]} />
-      <ambientLight intensity={0.8} />
+      <color attach="background" args={["#eeeae1"]} />
+      <ambientLight intensity={0.7} />
       <pointLight position={[5, 5, 5]} color="#fef3c7" intensity={2} />
       <pointLight position={[-5, -5, -5]} color="#e0f2fe" intensity={1.5} />
       <pointLight position={[0, 5, -5]} color="#dcfce7" intensity={1} />
@@ -113,7 +113,7 @@ export default function Login() {
   }, [isLoadingUser, user, setLocation]);
 
   if (isLoadingUser || user) {
-    return <div className="min-h-screen bg-[#fdfcf8] flex items-center justify-center"><Skeleton className="w-12 h-12 rounded-full" /></div>;
+    return <div className="min-h-screen bg-[#eeeae1] flex items-center justify-center"><Skeleton className="w-12 h-12 rounded-full" /></div>;
   }
 
   const onSubmit = (values: LoginFormValues) => {
@@ -128,10 +128,10 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex overflow-hidden" style={{ background: "#fdfcf8" }}>
+    <div className="min-h-screen flex overflow-hidden" style={{ background: "#eeeae1" }}>
       {/* LEFT — 3D Scene */}
       <div className="hidden lg:flex lg:w-3/5 relative">
-        <Suspense fallback={<div className="w-full h-full bg-[#fdfcf8]" />}>
+        <Suspense fallback={<div className="w-full h-full bg-[#eeeae1]" />}>
           <Scene3D />
         </Suspense>
         {/* Overlay text */}
@@ -145,7 +145,7 @@ export default function Login() {
             </p>
             <div className="mt-6 flex gap-3">
               {["IA Integrada", "100% Digital", "Tiempo Real"].map(tag => (
-                <span key={tag} className="text-xs px-3 py-1 rounded-full border border-blue-200 text-blue-600 bg-blue-50">
+                <span key={tag} className="text-xs px-3 py-1 rounded-full border border-blue-300 text-blue-800 bg-blue-100/50">
                   {tag}
                 </span>
               ))}
@@ -156,7 +156,7 @@ export default function Login() {
 
       {/* RIGHT — Login Form */}
       <div className="w-full lg:w-2/5 flex items-center justify-center p-8 relative"
-        style={{ background: "linear-gradient(135deg, #fdfcf8 0%, #f5f1e6 50%, #fdfcf8 100%)" }}>
+        style={{ background: "linear-gradient(135deg, #eeeae1 0%, #e5e0d4 50%, #eeeae1 100%)" }}>
         
         {/* Glow effect */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -191,7 +191,7 @@ export default function Login() {
                 placeholder="tu@email.com"
                 autoComplete="email"
                 {...form.register("email")}
-                className="mt-1.5 h-12 text-slate-900 placeholder:text-slate-400 border-slate-200 focus:border-blue-500 focus:ring-blue-500/10 bg-white"
+                className="mt-1.5 h-12 text-slate-900 placeholder:text-slate-500 border-slate-300 focus:border-blue-500 focus:ring-blue-500/10 bg-[#f5f1e6]"
               />
               {form.formState.errors.email && <p className="text-red-500 text-xs mt-1">{form.formState.errors.email.message}</p>}
             </div>
@@ -202,7 +202,7 @@ export default function Login() {
                 type="password"
                 autoComplete="current-password"
                 {...form.register("password")}
-                className="mt-1.5 h-12 text-slate-900 placeholder:text-slate-400 border-slate-200 focus:border-blue-500 focus:ring-blue-500/10 bg-white"
+                className="mt-1.5 h-12 text-slate-900 placeholder:text-slate-500 border-slate-300 focus:border-blue-500 focus:ring-blue-500/10 bg-[#f5f1e6]"
               />
               {form.formState.errors.password && <p className="text-red-500 text-xs mt-1">{form.formState.errors.password.message}</p>}
             </div>
