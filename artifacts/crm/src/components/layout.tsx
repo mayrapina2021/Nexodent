@@ -151,63 +151,37 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const handleLogout = () => {
     clearAuthToken();
     setLocation("/login");
-    logout.mutate(undefined, {}).catch(() => {});
+    logout.mutate(undefined, {});
   };
 
   const isMoreActive = moreNav.some(item => location.startsWith(item.href));
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row relative" style={{ background: "#030712" }}>
-
-      {/* ── Global 3D Background ──────────────────────────────────────────── */}
-      <div className="fixed inset-0 z-0 pointer-events-none">
-        <Suspense fallback={null}>
-          <AnimatedBg />
-        </Suspense>
-        {/* Dark overlay so content stays readable */}
-        <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(3,7,18,0.55) 0%, rgba(10,15,40,0.45) 100%)" }} />
-      </div>
+    <div className="min-h-screen flex flex-col md:flex-row bg-background">
 
       {/* ── Desktop Sidebar ───────────────────────────────────────────────── */}
       <aside
-        className="hidden md:flex flex-col h-screen sticky top-0 z-20"
-        style={{
-          width: "256px",
-          background: "rgba(3,7,18,0.80)",
-          backdropFilter: "blur(24px)",
-          borderRight: "1px solid rgba(59,130,246,0.15)",
-          boxShadow: "4px 0 30px rgba(0,0,0,0.5)",
-        }}
+        className="hidden md:flex flex-col h-screen sticky top-0 z-20 bg-sidebar border-r border-sidebar-border w-64"
       >
         {/* Logo */}
-        <div className="p-5 pb-4" style={{ borderBottom: "1px solid rgba(59,130,246,0.1)" }}>
+        <div className="p-5 pb-4">
           <ClinicLogo size="md" />
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+        <nav className="flex-1 px-4 py-2 space-y-0.5 overflow-y-auto">
           {allNav.map((item) => {
             const isActive = location.startsWith(item.href);
             return (
               <Link key={item.href} href={item.href}>
-                <span
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer",
-                    isActive
-                      ? "text-white"
-                      : "text-slate-400 hover:text-white"
-                  )}
-                  style={isActive ? {
-                    background: "linear-gradient(135deg, rgba(37,99,235,0.5), rgba(99,102,241,0.3))",
-                    boxShadow: "0 0 20px rgba(59,130,246,0.3), inset 0 1px 0 rgba(255,255,255,0.1)",
-                    border: "1px solid rgba(59,130,246,0.3)",
-                  } : {
-                    border: "1px solid transparent",
-                  }}
-                >
-                  <item.icon className={cn("h-4.5 w-4.5 shrink-0", isActive ? "text-sky-400" : "")} style={{ width: "18px", height: "18px" }} />
+                <span className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors cursor-pointer",
+                  isActive
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+                )}>
+                  <item.icon className="h-5 w-5 shrink-0" />
                   {item.label}
-                  {isActive && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-sky-400" />}
                 </span>
               </Link>
             );
@@ -215,60 +189,60 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </nav>
 
         {/* User + Logout */}
-        <div className="p-4 mt-auto" style={{ borderTop: "1px solid rgba(59,130,246,0.1)" }}>
-          <div className="flex items-center gap-3 mb-3 p-2 rounded-xl" style={{ background: "rgba(255,255,255,0.04)" }}>
-            <Avatar className="h-9 w-9 shrink-0" style={{ border: "2px solid rgba(59,130,246,0.4)" }}>
-              <AvatarFallback style={{ background: "linear-gradient(135deg, #1d4ed8, #6366f1)", color: "white", fontSize: "12px" }}>
+        <div className="p-4 border-t border-sidebar-border mt-auto">
+          <div className="flex items-center gap-3 mb-3">
+            <Avatar className="h-9 w-9 border border-sidebar-border shrink-0">
+              <AvatarFallback className="bg-primary text-primary-foreground text-xs">
                 {(user.name ?? "Ad").substring(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <div className="flex flex-col min-w-0">
-              <span className="text-sm font-semibold text-white truncate">{user.name}</span>
-              <span className="text-xs text-slate-500 truncate">{user.email}</span>
+              <span className="text-sm font-medium text-sidebar-foreground truncate">{user.name}</span>
+              <span className="text-xs text-sidebar-foreground/60 truncate">{user.email}</span>
             </div>
           </div>
-          <button
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10 border-sidebar-border"
             onClick={handleLogout}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium text-red-400 transition-all hover:text-red-300 cursor-pointer"
-            style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)" }}
           >
-            <LogOut className="h-4 w-4 shrink-0" />
+            <LogOut className="mr-2 h-4 w-4" />
             Cerrar sesión
-          </button>
+          </Button>
         </div>
       </aside>
 
       {/* ── Mobile Top Header ─────────────────────────────────────────────── */}
-      <div
-        className="md:hidden flex items-center justify-between px-4 py-3 sticky top-0 z-30"
-        style={{ background: "rgba(3,7,18,0.85)", backdropFilter: "blur(20px)", borderBottom: "1px solid rgba(59,130,246,0.15)" }}
-      >
+      <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-card sticky top-0 z-30">
         <ClinicLogo size="sm" />
-        <Avatar className="h-8 w-8" style={{ border: "2px solid rgba(59,130,246,0.4)" }}>
-          <AvatarFallback style={{ background: "linear-gradient(135deg, #1d4ed8, #6366f1)", color: "white", fontSize: "11px" }}>
+        <Avatar className="h-8 w-8 border border-border">
+          <AvatarFallback className="bg-primary text-primary-foreground text-xs">
             {(user.name ?? "Ad").substring(0, 2).toUpperCase()}
           </AvatarFallback>
         </Avatar>
       </div>
 
       {/* ── Main Content ──────────────────────────────────────────────────── */}
-      <main className="flex-1 min-w-0 flex flex-col overflow-hidden relative z-10">
+      <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8">
           {children}
         </div>
       </main>
 
       {/* ── Mobile Bottom Nav ─────────────────────────────────────────────── */}
-      <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40"
-        style={{ background: "rgba(3,7,18,0.92)", backdropFilter: "blur(20px)", borderTop: "1px solid rgba(59,130,246,0.15)" }}
-      >
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-card border-t border-border">
         <div className="flex items-stretch h-16">
           {mainNav.slice(0, 5).map((item) => {
             const isActive = location.startsWith(item.href);
             return (
               <Link key={item.href} href={item.href} className="flex-1">
-                <span className={cn("flex flex-col items-center justify-center gap-0.5 h-full w-full transition-colors", isActive ? "text-sky-400" : "text-slate-500")}>
+                <span className={cn(
+                  "flex flex-col items-center justify-center gap-0.5 h-full w-full transition-colors",
+                  isActive
+                    ? "text-primary"
+                    : "text-muted-foreground"
+                )}>
                   <item.icon className={cn("h-5 w-5", isActive && "scale-110")} />
                   <span className="text-[10px] font-medium leading-none">{item.label}</span>
                 </span>
@@ -276,7 +250,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             );
           })}
           <button
-            className={cn("flex-1 flex flex-col items-center justify-center gap-0.5 h-full transition-colors", isMoreActive || moreOpen ? "text-sky-400" : "text-slate-500")}
+            className={cn(
+              "flex-1 flex flex-col items-center justify-center gap-0.5 h-full transition-colors",
+              isMoreActive || moreOpen ? "text-primary" : "text-muted-foreground"
+            )}
             onClick={() => setMoreOpen(v => !v)}
           >
             {moreOpen ? <X className="h-5 w-5" /> : <MoreHorizontal className="h-5 w-5" />}
@@ -288,17 +265,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* ── Mobile "Más" panel ────────────────────────────────────────────── */}
       {moreOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex flex-col justify-end">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMoreOpen(false)} />
-          <div className="relative rounded-t-2xl pt-3 pb-8 px-4 z-10 shadow-2xl"
-            style={{ background: "rgba(3,7,18,0.95)", border: "1px solid rgba(59,130,246,0.2)" }}>
-            <div className="w-10 h-1 bg-slate-600 rounded-full mx-auto mb-4" />
+          <div className="absolute inset-0 bg-black/50" onClick={() => setMoreOpen(false)} />
+          <div className="relative bg-card rounded-t-2xl border-t border-border pt-3 pb-8 px-4 z-10 shadow-2xl">
+            <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-4" />
             <div className="space-y-1 mb-4">
               {moreNav.map((item) => {
                 const isActive = location.startsWith(item.href);
                 return (
                   <Link key={item.href} href={item.href} onClick={() => setMoreOpen(false)}>
-                    <span className={cn("flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all",
-                      isActive ? "text-sky-400" : "text-slate-300 hover:text-white hover:bg-white/5")}>
+                    <span className={cn(
+                      "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors",
+                      isActive
+                        ? "bg-primary/10 text-primary"
+                        : "text-foreground hover:bg-muted/50"
+                    )}>
                       <item.icon className="h-5 w-5 shrink-0" />
                       {item.label}
                     </span>
@@ -306,19 +286,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 );
               })}
             </div>
-            <div className="border-t border-white/10 pt-3 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Avatar className="h-9 w-9" style={{ border: "2px solid rgba(59,130,246,0.4)" }}>
-                  <AvatarFallback style={{ background: "linear-gradient(135deg,#1d4ed8,#6366f1)", color: "white", fontSize: "12px" }}>
+            <div className="border-t border-border pt-3 flex items-center justify-between">
+              <div className="flex items-center gap-3 min-w-0">
+                <Avatar className="h-9 w-9 border border-border shrink-0">
+                  <AvatarFallback className="bg-primary text-primary-foreground text-xs">
                     {(user.name ?? "Ad").substring(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                <div>
-                  <p className="text-sm font-semibold text-white">{user.name}</p>
-                  <p className="text-xs text-slate-500">{user.email}</p>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{user.name}</p>
+                  <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                 </div>
               </div>
-              <Button variant="ghost" size="icon" className="text-red-400 hover:bg-red-500/10" onClick={handleLogout}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-destructive hover:bg-destructive/10 shrink-0"
+                onClick={handleLogout}
+              >
                 <LogOut className="h-5 w-5" />
               </Button>
             </div>
