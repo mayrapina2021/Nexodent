@@ -25,7 +25,7 @@ export default function PatientClinicalDialog({ patient, open, onOpenChange }: P
   
   const { toast } = useToast();
   const updatePatient = useUpdatePatient();
-  const { data: evolutions, refetch: refetchEvolutions } = useListEvolutionNotes({ patientId: patient?.id }, { query: { enabled: !!patient?.id } });
+  const { data: evolutions, refetch: refetchEvolutions } = useListEvolutionNotes({ patientId: patient?.id });
   const createEvolution = useCreateEvolutionNote();
 
   useEffect(() => {
@@ -89,7 +89,7 @@ export default function PatientClinicalDialog({ patient, open, onOpenChange }: P
             <TabsContent value="odontogram" className="m-0 space-y-4">
               <Odontogram 
                 data={odontogram} 
-                onChange={(id, state) => setOdontogram(prev => ({ ...prev, [id]: state }))} 
+                onChange={(id: number, state: any) => setOdontogram(prev => ({ ...prev, [id]: state }))} 
               />
               <div className="flex justify-end">
                 <Button onClick={handleSaveOdontogram} disabled={updatePatient.isPending}>Guardar Odontograma</Button>

@@ -137,5 +137,13 @@ router.patch("/clinical/quotations/:id", async (req, res): Promise<void> => {
 });
 
 
+router.delete("/clinical/quotations/:id", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  const [deleted] = await db.delete(quotationsTable).where(eq(quotationsTable.id, id)).returning();
+  if (!deleted) { res.status(404).json({ error: "Quotation not found" }); return; }
+  res.json({ message: "Presupuesto eliminado correctamente" });
+});
+
+
 export default router;
 

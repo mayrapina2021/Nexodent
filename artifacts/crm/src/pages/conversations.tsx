@@ -5,7 +5,7 @@ import { useListConversations, useGetConversation, useSendMessage, useSetConvers
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { Search, Send, Bot, User, Phone, Mail } from "lucide-react";
+import { Search, Send, Bot, User, Phone } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -222,26 +222,6 @@ export default function Conversations() {
           </div>
         )}
 
-        {/* Panel de info del paciente */}
-        {selectedId && patient && (
-          <div className="w-64 flex-shrink-0 bg-card/80 border-l border-border/50 p-4 overflow-y-auto">
-            <h3 className="font-semibold text-sm mb-4">Información del Paciente</h3>
-            <div className="space-y-3">
-              <div className="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4">
-                <User className="h-7 w-7 text-primary-foreground" />
-              </div>
-              <p className="text-center font-semibold text-foreground">{patient.name}</p>
-              <Badge className="mx-auto block w-fit text-xs bg-accent/20 text-accent-foreground border-accent/30">{patient.status}</Badge>
-              <div className="space-y-2 text-xs text-muted-foreground pt-2">
-                <div className="flex items-center gap-2"><Phone className="h-3.5 w-3.5" />{patient.phone}</div>
-                {patient.email && <div className="flex items-center gap-2"><Mail className="h-3.5 w-3.5" />{patient.email}</div>}
-                {patient.treatment && <div className="flex items-center gap-2"><span className="text-accent">Tratamiento:</span>{patient.treatment}</div>}
-                {patient.age && <div>Edad: {patient.age} años</div>}
-                {patient.notes && <p className="mt-2 p-2 bg-background/50 rounded text-xs">{patient.notes}</p>}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </Layout>
   );

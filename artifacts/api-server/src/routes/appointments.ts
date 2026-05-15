@@ -13,6 +13,62 @@ import {
 
 const router: IRouter = Router();
 
+/** Fecha de hoy en Colombia (YYYY-MM-DD) */
+function getColombiaToday(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Bogota",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
+}
+
+/**
+ * Reglas de sincronización (basadas en fecha real):
+ *  1. Auto-completa citas scheduled/confirmed PASADAS → status "completed"
+ *  2. Si tiene cita futura scheduled/confirmed        → paciente "scheduled"
+ *  3. Si solo tiene citas pasadas/completed/no_show   → paciente "attended"
+ *  4. Solo canceladas                                 → no cambia
+ */
+async function syncPatientStatus(patientId: number): Promise<void> {
+  const today = getColombiaToday();
+
+  // Auto-completar citas que ya pasaron y quedaron sin cerrar
+  await db
+    .update(appointmentsTable)
+    .set({ status: "completed" })
+    .where(
+      and(
+        eq(appointmentsTable.patientId, patientId),
+        sql`${appointmentsTable.date} < ${today}`,
+        sql`${appointmentsTable.status} IN ('scheduled', 'confirmed')`
+      )
+    );
+
+  // Re-leer el estado actualizado
+  const allAppts = await db
+    .select({ status: appointmentsTable.status, date: appointmentsTable.date })
+    .from(appointmentsTable)
+    .where(eq(appointmentsTable.patientId, patientId));
+
+  const hasFutureActive = allAppts.some(
+    (a) => (a.status === "scheduled" || a.status === "confirmed") && a.date >= today
+  );
+  const hasAttended = allAppts.some(
+    (a) => a.status === "completed" || a.status === "no_show"
+  );
+
+  let newStatus: string | null = null;
+  if (hasFutureActive) {
+    newStatus = "scheduled";
+  } else if (hasAttended) {
+    newStatus = "attended";
+  }
+
+  if (newStatus) {
+    await db.update(patientsTable).set({ status: newStatus }).where(eq(patientsTable.id, patientId));
+  }
+}
+
+
 function addMinutes(time: string, minutes: number): string {
   const [h, m] = time.split(":").map(Number);
   const total = h * 60 + m + minutes;
@@ -94,6 +150,10 @@ router.post("/appointments", async (req, res): Promise<void> => {
   if (hasConflict) { res.status(409).json({ error: "Time slot conflict" }); return; }
 
   const [appt] = await db.insert(appointmentsTable).values({ patientId, treatment, date, startTime, endTime, notes }).returning();
+  
+  // Sync patient status based on all their appointments
+  await syncPatientStatus(patientId);
+
   const [patient] = await db.select().from(patientsTable).where(eq(patientsTable.id, patientId));
   res.status(201).json({ ...appt, patientName: patient?.name ?? "", patientPhone: patient?.phone ?? "" });
 });
@@ -135,6 +195,10 @@ router.put("/appointments/:id", async (req, res): Promise<void> => {
 
   const [appt] = await db.update(appointmentsTable).set(updateData as any).where(eq(appointmentsTable.id, params.data.id)).returning();
   if (!appt) { res.status(404).json({ error: "Appointment not found" }); return; }
+  
+  // Sync patient status after appointment change
+  await syncPatientStatus(appt.patientId);
+  
   const [patient] = await db.select().from(patientsTable).where(eq(patientsTable.id, appt.patientId));
   res.json({ ...appt, patientName: patient?.name ?? "", patientPhone: patient?.phone ?? "" });
 });
@@ -145,6 +209,10 @@ router.delete("/appointments/:id", async (req, res): Promise<void> => {
   if (!params.success) { res.status(400).json({ error: "Invalid id" }); return; }
   const [deleted] = await db.delete(appointmentsTable).where(eq(appointmentsTable.id, params.data.id)).returning();
   if (!deleted) { res.status(404).json({ error: "Appointment not found" }); return; }
+  
+  // Re-sync patient status after appointment deletion
+  await syncPatientStatus(deleted.patientId);
+  
   res.json({ message: "Appointment cancelled" });
 });
 

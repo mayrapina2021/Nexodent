@@ -1,5 +1,6 @@
-import { db, usersTable, aiKnowledgeTable, aiPersonalityTable } from "./index";
-import { eq } from "drizzle-orm";
+import { db } from "./index";
+import { usersTable, aiKnowledgeTable, aiPersonalityTable, patientsTable, appointmentsTable, treatmentsTable } from "./schema";
+import { eq, sql } from "drizzle-orm";
 
 const knowledge = [
   {
@@ -215,7 +216,134 @@ async function seed() {
     await db.update(aiPersonalityTable)
       .set({ ...personality, updatedAt: new Date() })
       .where(eq(aiPersonalityTable.id, existingPersonality.id));
-    console.log("Personalidad de Andrea actualizada");
+  console.log("Personalidad de Andrea actualizada");
+  }
+
+  // --- IMPORTACION DE PACIENTES DESDE EXCEL ---
+  const rawPatients = [
+    { "name": "HERNANDO RAMIREZ DUQUE", "phone": "3022699086", "treatment": "PROTESIS TOTAL SUPERIOR ACRILICA" },
+    { "name": "SANTIAGO JARAMILLO", "phone": "3206083966", "treatment": "ORTODONCIA CONVENCIONAL O AUTOLIGADO" },
+    { "name": "MARIBEL REHOLLEDO", "phone": "3013053763", "treatment": "Consulta general" },
+    { "name": "JHON ESTEBAN RESTREPO", "phone": "3193414766", "treatment": "ORTODONCIA CONVENCIOANL" },
+    { "name": "CLAUDIA SERRANO", "phone": "3014895645", "treatment": "LIMPIEZA" },
+    { "name": "ALICIA GIOVANA GUIRAL", "phone": "3019642351", "treatment": "PROTESIS" },
+    { "name": "CARMEN CECILIA AÑEZ", "phone": "3023371974", "treatment": "LIMPIEZA - PERIAPICAL" },
+    { "name": "POLA PAZ AYALA", "phone": "3011726865", "treatment": "CARILLAS EN DISILICATO" },
+    { "name": "JORGE LEAVY", "phone": "3238385475", "treatment": "PROTESIS SUP- CARILLAS EN RESINA" },
+    { "name": "KEVIN RADAL GIL", "phone": "3011216921", "treatment": "DISEÑO DE SONRISA" },
+    { "name": "MARTHA LIGIA JIMENEZ", "phone": "3105158592", "treatment": "PROTESIS" },
+    { "name": "YENIFER CAROLINA OLIVARES", "phone": "3023371974", "treatment": "ORTODONCIA CONVENCIONAL" },
+    { "name": "GLORIA NERY GARCIA", "phone": "3127950520", "treatment": "FASE HIGIENICA , CAMBIO DE CORONA 22 Y AMALGAMA V 24" },
+    { "name": "ELMER ARANGO VASQUEZ", "phone": "71946077", "treatment": "CAMBIO DE AMALGAMA 37 36 16 26" },
+    { "name": "ROSALBA RAMIREZ", "phone": "3102884882", "treatment": "Consulta general" },
+    { "name": "MARIA VIDALIA VASQUEZ", "phone": "3217086151", "treatment": "PLACA ESTETICA SUPERIOR ( MAS EXODONCIA )" },
+    { "name": "FABIO ORTIZ", "phone": "3128089560", "treatment": "IMPLANTE 22  ,  EXODONCIA" },
+    { "name": "KLEIDER USUGA", "phone": "3044720975", "treatment": "MICRODISEÑO" },
+    { "name": "MARIA EUGENIA ECHEVERRI", "phone": "3235240129", "treatment": "DISEÑO DE SONRISA" },
+    { "name": "MIRIAM RAQUEL ROBLEDO", "phone": "3103532290", "treatment": "LIMPIEZA- EXODONCIA RR" },
+    { "name": "YAIR MARTINEZ", "phone": "3045720944", "treatment": "ORTODONCIA" },
+    { "name": "ALEJANDRA PALACIOS", "phone": "3044029395", "treatment": "ORTODONCIA" },
+    { "name": "SARA OLIVO", "phone": "3173749974", "treatment": "LIMPIEZA" },
+    { "name": "RUBBY SANTAMARIA", "phone": "3103885950", "treatment": "LIMPIEZA, PROTESIS , EXODONCIAS" },
+    { "name": "ORNALIZ DIAZ", "phone": "3117171598", "treatment": "LIMPIEZA" },
+    { "name": "JHONATAN VILLA", "phone": "3102781887", "treatment": "RESINA" },
+    { "name": "SANDRA MILENA PIEDRAHITA", "phone": "3007897911", "treatment": "PROTESIS SUPERIOR" },
+    { "name": "CARMEN ROJAS", "phone": "3118009932", "treatment": "PROTESIS SUPERIOR" },
+    { "name": "MARIA FERNANDA URIBE", "phone": "3108501091", "treatment": "ORTODONCIA CONVENCIONAL" },
+    { "name": "ISAURA CAMACHO", "phone": "3108501091", "treatment": "2 CARILLA EN DISCILICATO" },
+    { "name": "MARIA FERNANDA GOMEZ", "phone": "3155235757", "treatment": "VALORACION" },
+    { "name": "MARITZA PEREZA", "phone": "3158854675", "treatment": "PROTESIS REMOVIBLE TOTAL" },
+    { "name": "MARELVIS MENDEZ", "phone": "3158854675", "treatment": "ORTODONCIA CONVENCIONAL" },
+    { "name": "LAURA RIVERA", "phone": "3206425181", "treatment": "ORTODONCIA CONVENCIOANL" },
+    { "name": "SHELVY UMBHA", "phone": "3004916968", "treatment": "LIMPIEZA , IMPLANTES, ENDODONCIA" },
+    { "name": "MARQUINI ADRIANA CHACI", "phone": "3045554198", "treatment": "2 ACKER" },
+    { "name": "CECILIA LOPEZ", "phone": "3023518033", "treatment": "RADIOGRAFIA PERIAPICAL" },
+    { "name": "DAHIANA OCAMPO", "phone": "3011460035", "treatment": "Consulta general" },
+    { "name": "DAVID SANTIAGO BARRERA", "phone": "3123424887", "treatment": "DISEÑO DE SONRISA" },
+    { "name": "KARINA GRACIANO", "phone": "3207645785", "treatment": "Consulta general" }
+  ];
+
+  console.log(`Importando ${rawPatients.length} pacientes desde el libro de valoraciones...`);
+  for (const p of rawPatients) {
+    const cleanPhone = p.phone.toString().replace(/\D/g, "");
+    const formattedPhone = cleanPhone.startsWith("57") ? `+${cleanPhone}` : `+57${cleanPhone}`;
+    
+    const [exists] = await db.select().from(patientsTable).where(eq(patientsTable.phone, formattedPhone));
+    if (!exists) {
+      await db.insert(patientsTable).values({
+        name: p.name.trim(),
+        phone: formattedPhone,
+        treatment: p.treatment,
+        status: "new"
+      });
+    }
+  }
+  console.log("Pacientes importados correctamente.");
+
+  // ── Sincronizar status de pacientes con sus citas ─────────────────────────
+  console.log("Sincronizando estados de pacientes con la agenda...");
+
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Bogota",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
+
+  // 1. Auto-completar citas pasadas que quedaron sin cerrar
+  await db
+    .update(appointmentsTable)
+    .set({ status: "completed" })
+    .where(sql`date < ${today} AND status IN ('scheduled', 'confirmed')`);
+
+  // 2. Reclasificar pacientes según citas actualizadas
+  const allAppts2 = await db
+    .select({ patientId: appointmentsTable.patientId, status: appointmentsTable.status, date: appointmentsTable.date })
+    .from(appointmentsTable);
+
+  const byPatient = new Map<number, { status: string; date: string }[]>();
+  for (const a of allAppts2) {
+    const list = byPatient.get(a.patientId) ?? [];
+    list.push({ status: a.status, date: a.date });
+    byPatient.set(a.patientId, list);
+  }
+
+  let syncCount = 0;
+  for (const [patientId, appts] of byPatient) {
+    const hasFutureActive = appts.some(
+      (a) => (a.status === "scheduled" || a.status === "confirmed") && a.date >= today
+    );
+    const hasAttended = appts.some(
+      (a) => a.status === "completed" || a.status === "no_show"
+    );
+    let newStatus: string | null = null;
+    if (hasFutureActive) {
+      newStatus = "scheduled";
+    } else if (hasAttended) {
+      newStatus = "attended";
+    }
+    if (newStatus) {
+      await db.update(patientsTable).set({ status: newStatus }).where(eq(patientsTable.id, patientId));
+      syncCount++;
+    }
+  }
+  console.log(`${syncCount} pacientes sincronizados con la agenda.`);
+
+  // ── Sembrar tratamientos por defecto ────────────────────────────────────
+  console.log("Verificando catálogo de servicios...");
+  const existingTreatments = await db.select().from(treatmentsTable);
+  if (existingTreatments.length === 0) {
+    const defaultServices = [
+      { name: "Valoración Inicial", price: "0", duration: 30 },
+      { name: "Limpieza Profunda (Profilaxis)", price: "120000", duration: 45 },
+      { name: "Resina de Alta Estética (Calza)", price: "150000", duration: 60 },
+      { name: "Blanqueamiento Dental LED", price: "450000", duration: 60 },
+      { name: "Extracción Dental Simple", price: "100000", duration: 45 },
+      { name: "Diseño de Sonrisa (Carilla)", price: "600000", duration: 120 },
+      { name: "Tratamiento de Conducto (Endodoncia)", price: "350000", duration: 90 },
+      { name: "Corona en Zirconio", price: "1200000", duration: 60 },
+      { name: "Implante Dental (Solo Fase Quirúrgica)", price: "2500000", duration: 90 },
+    ];
+    await db.insert(treatmentsTable).values(defaultServices as any);
+    console.log(`✅ ${defaultServices.length} servicios añadidos al catálogo.`);
   }
 
   console.log("Seed completado correctamente");

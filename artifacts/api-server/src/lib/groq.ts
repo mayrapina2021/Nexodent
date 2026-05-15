@@ -15,6 +15,7 @@ export interface AIActions {
   registerPatient?: { name: string; phone?: string | null; treatment: string } | null;
   bookAppointment?: { date: string; startTime: string; treatment: string; notes?: string } | null;
   updatePhone?: { phone: string } | null;
+  updateStatus?: { status: "new" | "interested" | "scheduled" | "attended" | "in_treatment" | "completed" } | null;
 }
 
 export interface AIResponse {
@@ -256,11 +257,13 @@ ${knowledgeSection}${availableSlotsSection}
 FORMATO DE RESPUESTA - CRITICO:
 Responde UNICAMENTE con JSON valido. Sin markdown, sin texto antes ni despues:
 {"message":"tu respuesta al paciente","actions":{"registerPatient":null,"bookAppointment":null,"updatePhone":null}}
+{"message":"tu respuesta al paciente","actions":{"registerPatient":null,"bookAppointment":null,"updatePhone":null,"updateStatus":null}}
 
 ACCIONES:
 - registerPatient: ${patientAlreadyRegistered ? "null - paciente YA registrado." : "{\"name\":\"Nombre Apellido\",\"phone\":null,\"treatment\":\"tratamiento o Consulta general\"} - SOLO la primera vez que tengas nombre completo."}
 - bookAppointment: {"date":"YYYY-MM-DD","startTime":"HH:MM","treatment":"tratamiento","notes":"resumen"} - SOLO cuando confirme fecha Y hora.
 - updatePhone: ${patientHasPhone ? "null - ya tiene celular guardado." : "{\"phone\":\"numero sin espacios\"} - cuando de su celular (10 digitos o +57...)."}
+- updateStatus: {"status":"interested"} - úsalo si el paciente muestra interés real en un tratamiento específico pero aún no agenda. Úsalo como "scheduled" si agendó, o "completed" si terminó.
 
 Sin accion clara = null. testMode = todas null.`;
 
@@ -341,6 +344,7 @@ Sin accion clara = null. testMode = todas null.`;
         registerPatient: parsed.actions?.registerPatient ?? null,
         bookAppointment: parsed.actions?.bookAppointment ?? null,
         updatePhone: parsed.actions?.updatePhone ?? null,
+        updateStatus: parsed.actions?.updateStatus ?? null,
       },
     };
   } catch (err) {

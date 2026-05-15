@@ -216,9 +216,11 @@ router.post("/conversations/incoming", async (req, res): Promise<void> => {
   }
 
   // ── Generar respuesta IA con horarios disponibles ──────────────────────────
+  let aiResult: any;
+  let aiMsg: any;
   try {
     const availableSlots = await getAvailableSlots();
-    const aiResult = await generateAIResponse(conv.id, message, { availableSlots });
+    aiResult = await generateAIResponse(conv.id, message, { availableSlots });
     const aiText = aiResult.message;
 
     if (!aiText) {
@@ -226,12 +228,13 @@ router.post("/conversations/incoming", async (req, res): Promise<void> => {
        return;
     }
 
-    const [aiMsg] = await db.insert(messagesTable).values({
+    const [newAiMsg] = await db.insert(messagesTable).values({
       conversationId: conv.id,
       content: aiText,
       sender: "ai",
       read: true,
     }).returning();
+    aiMsg = newAiMsg;
 
     await db.update(conversationsTable).set({
       lastMessage: aiText,
@@ -239,7 +242,25 @@ router.post("/conversations/incoming", async (req, res): Promise<void> => {
     }).where(eq(conversationsTable.id, conv.id));
 
     // ── Procesar acciones: registrar paciente ──────────────────────────────────
-    const { registerPatient, bookAppointment, updatePhone } = aiResult.actions;
+    const { registerPatient, bookAppointment, updatePhone, updateStatus } = aiResult.actions;
+    
+    // ── Procesar acciones: actualizar estado del paciente ───────────────────
+    if (updateStatus && updateStatus.status) {
+      try {
+        let patientId = conv.patientId;
+        if (!patientId) {
+          const formattedPhone = phone.startsWith("+") ? phone : `+${phone}`;
+          const [byPhone] = await db.select().from(patientsTable).where(eq(patientsTable.phone, formattedPhone));
+          patientId = byPhone?.id ?? null;
+        }
+        if (patientId) {
+          await db.update(patientsTable).set({ status: updateStatus.status }).where(eq(patientsTable.id, patientId));
+          logger.info({ patientId, status: updateStatus.status }, "Estado del paciente actualizado por IA");
+        }
+      } catch (err) {
+        logger.error({ err }, "Error actualizando estado desde IA");
+      }
+    }
     // ... rest of processing ...
   const formattedPhone = phone.startsWith("+") ? phone : `+${phone}`;
 

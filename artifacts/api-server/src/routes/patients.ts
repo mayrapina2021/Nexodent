@@ -15,6 +15,7 @@ const router: IRouter = Router();
 router.get("/patients", async (req, res): Promise<void> => {
   const query = ListPatientsQueryParams.safeParse(req.query);
   const conditions = [];
+
   if (query.success) {
     if (query.data.search) conditions.push(ilike(patientsTable.name, `%${query.data.search}%`));
     if (query.data.status) conditions.push(eq(patientsTable.status, query.data.status));
@@ -27,10 +28,16 @@ router.get("/patients", async (req, res): Promise<void> => {
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(sql`${patientsTable.createdAt} desc`);
 
+  // Próxima cita de cada paciente (solo fechas futuras o de hoy)
+  const colombiaToday = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Bogota",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
+
   const nextApptMap = new Map<number, string>();
   if (patients.length) {
     const appts = await db.select().from(appointmentsTable)
-      .where(eq(appointmentsTable.status, "scheduled"))
+      .where(sql`${appointmentsTable.status} IN ('scheduled', 'confirmed') AND ${appointmentsTable.date} >= ${colombiaToday}`)
       .orderBy(appointmentsTable.date);
     for (const a of appts) {
       if (!nextApptMap.has(a.patientId)) {

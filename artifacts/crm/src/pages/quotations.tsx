@@ -1,8 +1,16 @@
 import Layout from "@/components/layout";
-import { useListPatients, useListQuotations, useCreateQuotation, useUpdateQuotation, getListQuotationsQueryKey } from "@workspace/api-client-react";
+import { 
+  useListPatients, 
+  useListQuotations, 
+  useCreateQuotation, 
+  useUpdateQuotation, 
+  useListTreatments,
+  getListQuotationsQueryKey,
+  customFetch
+} from "@workspace/api-client-react";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, FileText, Send, Trash2, Printer, Pencil } from "lucide-react";
+import { Plus, FileText, Send, Trash2, Pencil } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +36,7 @@ export default function Quotations() {
 
   const { data: patients } = useListPatients();
   const { data: quotations, isLoading } = useListQuotations();
+  const { data: treatments } = useListTreatments();
   const createQuotation = useCreateQuotation();
   const updateQuotation = useUpdateQuotation();
 
@@ -38,6 +47,15 @@ export default function Quotations() {
   const updateItem = (idx: number, field: keyof QuotationItem, value: any) => {
     const newItems = [...items];
     newItems[idx] = { ...newItems[idx], [field]: field === "price" ? parseInt(value) || 0 : value };
+    
+    // Auto-populate price if service is selected from dropdown
+    if (field === "service") {
+      const treatment = treatments?.find(t => t.name === value);
+      if (treatment) {
+        newItems[idx].price = Math.round(parseFloat(treatment.price as any));
+      }
+    }
+    
     setItems(newItems);
   };
 
@@ -53,6 +71,18 @@ export default function Quotations() {
     setEditingId(null);
     setItems([{ service: "", price: 0 }]);
     setSelectedPatientId("");
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("¿Estás seguro de eliminar este presupuesto?")) return;
+    
+    try {
+      await customFetch(`/api/clinical/quotations/${id}`, { method: "DELETE" });
+      toast({ title: "Presupuesto eliminado" });
+      invalidate();
+    } catch (err) {
+      toast({ variant: "destructive", title: "Error al eliminar" });
+    }
   };
 
   const total = items.reduce((sum, item) => sum + item.price, 0);
@@ -77,7 +107,7 @@ export default function Quotations() {
     };
 
     if (editingId) {
-      updateQuotation.mutate({ id: editingId, data: payload }, {
+      updateQuotation.mutate({ id: editingId, data: payload as any }, {
         onSuccess: () => {
           toast({ title: sendToWhatsApp ? "Presupuesto actualizado y enviado" : "Presupuesto actualizado" });
           closeDialog();
@@ -86,7 +116,7 @@ export default function Quotations() {
         onSettled: () => setSending(false)
       });
     } else {
-      createQuotation.mutate({ data: payload }, {
+      createQuotation.mutate({ data: payload as any }, {
         onSuccess: () => {
           toast({ title: sendToWhatsApp ? "Presupuesto enviado por WhatsApp" : "Presupuesto creado" });
           closeDialog();
@@ -140,9 +170,14 @@ export default function Quotations() {
                           {q.status === "sent" ? "Enviado" : "Borrador"}
                         </Badge>
                       </div>
-                      <Button variant="ghost" size="sm" onClick={() => openEdit(q)} className="opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Pencil className="h-4 w-4 mr-1" /> Abrir
-                      </Button>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="sm" onClick={() => openEdit(q)}>
+                          <Pencil className="h-4 w-4 mr-1" /> Editar
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleDelete(q.id)} className="text-destructive hover:bg-destructive/10">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                   <div className="p-4 border-t border-border/30">
@@ -191,23 +226,37 @@ export default function Quotations() {
                 </Button>
               </div>
               
-              <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+              <div className="space-y-3 max-h-72 overflow-y-auto pr-2 custom-scrollbar">
                 {items.map((item, idx) => (
-                  <div key={idx} className="flex gap-2">
-                    <Input 
-                      placeholder="Servicio (ej: Calza de resina)" 
-                      value={item.service} 
-                      onChange={e => updateItem(idx, "service", e.target.value)}
-                      className="bg-background flex-1"
-                    />
-                    <Input 
-                      type="number" 
-                      placeholder="Precio" 
-                      value={item.price || ""} 
-                      onChange={e => updateItem(idx, "price", e.target.value)}
-                      className="bg-background w-32 text-right"
-                    />
-                    <Button variant="ghost" size="icon" onClick={() => removeItem(idx)} disabled={items.length === 1} className="text-muted-foreground hover:text-destructive">
+                  <div key={idx} className="flex gap-2 items-start bg-muted/10 p-2 rounded-lg border border-border/30">
+                    <div className="flex-1 space-y-1">
+                      <Select value={item.service} onValueChange={v => updateItem(idx, "service", v)}>
+                        <SelectTrigger className="bg-background">
+                          <SelectValue placeholder="Seleccionar servicio..." />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-[250px] overflow-y-auto">
+                          {treatments?.map(t => (
+                            <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="w-32">
+                      <Input 
+                        type="number" 
+                        placeholder="Precio" 
+                        value={item.price || ""} 
+                        onChange={e => updateItem(idx, "price", e.target.value)}
+                        className="bg-background text-right"
+                      />
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => removeItem(idx)} 
+                      disabled={items.length === 1} 
+                      className="text-muted-foreground hover:text-destructive h-10 w-10"
+                    >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>

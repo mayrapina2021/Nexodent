@@ -1,5 +1,5 @@
-import { db, usersTable, aiKnowledgeTable, aiPersonalityTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, usersTable, aiKnowledgeTable, aiPersonalityTable, appointmentsTable, patientsTable } from "@workspace/db";
+import { eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
 
 const KNOWLEDGE = [
@@ -200,6 +200,59 @@ export async function runStartupSeed(): Promise<void> {
         .where(eq(aiPersonalityTable.id, existingP.id));
       logger.info("AI personality updated");
     }
+
+    // ── Sincronizar estados de pacientes con sus citas ───────────────────────
+    // Regla: citas pasadas no canceladas → completed; paciente con citas futuras → scheduled; resto → attended
+    try {
+      const today = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Bogota",
+        year: "numeric", month: "2-digit", day: "2-digit",
+      }).format(new Date());
+
+      // 1. Auto-completar citas pasadas que no se cerraron
+      await db
+        .update(appointmentsTable)
+        .set({ status: "completed" })
+        .where(sql`${appointmentsTable.date} < ${today} AND ${appointmentsTable.status} IN ('scheduled', 'confirmed')`);
+
+      // 2. Determinar estado de cada paciente basado en sus citas actualizadas
+      const allAppts = await db
+        .select({ patientId: appointmentsTable.patientId, status: appointmentsTable.status, date: appointmentsTable.date })
+        .from(appointmentsTable);
+
+      const byPatient = new Map<number, { status: string; date: string }[]>();
+      for (const a of allAppts) {
+        const list = byPatient.get(a.patientId) ?? [];
+        list.push({ status: a.status, date: a.date });
+        byPatient.set(a.patientId, list);
+      }
+
+      let synced = 0;
+      for (const [patientId, appts] of byPatient) {
+        const hasFutureActive = appts.some(
+          (a) => (a.status === "scheduled" || a.status === "confirmed") && a.date >= today
+        );
+        const hasAttended = appts.some(
+          (a) => a.status === "completed" || a.status === "no_show"
+        );
+
+        let newStatus: string | null = null;
+        if (hasFutureActive) {
+          newStatus = "scheduled";
+        } else if (hasAttended) {
+          newStatus = "attended";
+        }
+
+        if (newStatus) {
+          await db.update(patientsTable).set({ status: newStatus }).where(eq(patientsTable.id, patientId));
+          synced++;
+        }
+      }
+      logger.info({ synced }, "Sincronización de estados pacientes completada");
+    } catch (err) {
+      logger.error({ err }, "Error en sincronización de estados");
+    }
+
 
     logger.info("Startup seed completado");
   } catch (err) {
