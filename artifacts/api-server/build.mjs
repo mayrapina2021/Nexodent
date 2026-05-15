@@ -106,6 +106,8 @@ async function buildAll() {
       "puppeteer",
       "puppeteer-core",
       "electron",
+      "ms-edge-tts",
+      "jszip",
     ],
     sourcemap: "linked",
     plugins: [
@@ -129,7 +131,7 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
   const fs = await import("node:fs/promises");
   const assetsSrc = path.resolve(artifactDir, "src/assets");
   const assetsDist = path.resolve(distDir, "assets");
-  const publicSrc = path.resolve(artifactDir, "../../crm/public");
+  const publicSrc = path.resolve(artifactDir, "../crm/public");
   const publicDist = path.resolve(distDir, "public");
 
   try {

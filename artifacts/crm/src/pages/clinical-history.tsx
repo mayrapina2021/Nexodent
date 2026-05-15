@@ -6,7 +6,8 @@ import {
   getOdontogram, 
   updateOdontogram, 
   listEvolutionNotes, 
-  createEvolutionNote 
+  createEvolutionNote,
+  getSettings
 } from "@workspace/api-client-react";
 import Layout from "@/components/layout";
 import { Odontogram, ToothData } from "@/components/odontogram";
@@ -47,6 +48,11 @@ export default function ClinicalHistory() {
     queryKey: ["notes", patientId],
     queryFn: () => listEvolutionNotes({ patientId }),
     enabled: !!patientId,
+  });
+
+  const { data: settings } = useQuery({
+    queryKey: ["settings"],
+    queryFn: () => getSettings(),
   });
 
   const updateOdontogramMutation = useMutation({
@@ -98,30 +104,74 @@ export default function ClinicalHistory() {
     setLocation(`/quotations?patientId=${patientId}&items=${itemsParam}`);
   };
 
-  const handleExportRIPS = () => {
-    const ripsData = {
-      tipo_reporte: "RIPS_CONSULTA",
-      prestador: "Nexodent Clinic",
-      paciente: {
-        id: patient?.id,
-        nombre: patient?.name,
-        identificacion: patient?.phone // Placeholder for real ID
-      },
-      consultas: notes?.map(n => ({
-        fecha: format(new Date(n.createdAt), "dd/MM/yyyy"),
-        finalidad: "CONSULTA_ODONTOLOGICA",
-        diagnostico_principal: "K021 - Caries de la dentina", // Placeholder code
-        evolucion: n.content
-      }))
-    };
+  const handleExportRIPS = async () => {
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
+      const dateStr = format(new Date(), "ddMMyyyy");
+      const codPrestador = (settings as any)?.habilitationCode || "000000000000";
+      const codMunicipio = "05001"; // Medellín default
+      
+      // 1. Archivo de Usuarios (US)
+      const usContent = [
+        patient?.phone?.slice(-10) || "0000000000", // ID simplificado
+        "CC", 
+        patient?.phone?.slice(-10) || "0", 
+        "01", // EPS placeholder (General)
+        "1", // Tipo usuario (Contributivo)
+        patient?.name?.split(" ")[1] || "APELLIDO1",
+        patient?.name?.split(" ")[2] || "",
+        patient?.name?.split(" ")[0] || "NOMBRE1",
+        "", 
+        "30", // Edad
+        "1", // Unidad edad (años)
+        "M", // Sexo
+        codMunicipio,
+        "U" // Zona
+      ].join(",") + "\r\n";
+      zip.file(`US${dateStr}.txt`, usContent);
 
-    const blob = new Blob([JSON.stringify(ripsData, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `RIPS_${patient.name.replace(/\s+/g, "_")}_${format(new Date(), "yyyyMMdd")}.json`;
-    a.click();
-    toast({ title: "RIPS Generado", description: "El archivo JSON de reporte legal se ha descargado." });
+      // 2. Archivo de Consultas (AC)
+      let acContent = "";
+      notes?.forEach(n => {
+        acContent += [
+          "1", // Factura placeholder
+          codPrestador,
+          "CC",
+          patient?.phone?.slice(-10) || "0",
+          format(new Date(n.createdAt), "dd/MM/yyyy"),
+          "", // Autorización
+          "890203", // Código consulta Odontología
+          "1", // Finalidad
+          "10", // Causa externa (Enf General)
+          "K021", // DX Principal (Caries)
+          "", "", "", // DX Relacionados
+          "1", // Tipo DX
+          "0", "0", "0" // Valores
+        ].join(",") + "\r\n";
+      });
+      zip.file(`AC${dateStr}.txt`, acContent);
+
+      // 3. Archivo de Control (CT)
+      const ctContent = [
+        [codPrestador, format(new Date(), "dd/MM/yyyy"), `US${dateStr}`, "1"].join(","),
+        [codPrestador, format(new Date(), "dd/MM/yyyy"), `AC${dateStr}`, (notes?.length || 0).toString()].join(",")
+      ].join("\r\n");
+      zip.file(`CT${dateStr}.txt`, ctContent);
+
+      // Generar y descargar ZIP
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `RIPS_${patient.name.replace(/\s+/g, "_")}_${dateStr}.zip`;
+      a.click();
+      
+      toast({ title: "RIPS Generado", description: "Se ha descargado el archivo ZIP con los archivos planos (AC, US, CT) en formato legal." });
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Error", description: "No se pudo generar el archivo RIPS.", variant: "destructive" });
+    }
   };
 
   if (!patient) return null;

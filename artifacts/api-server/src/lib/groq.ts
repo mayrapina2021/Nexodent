@@ -5,7 +5,7 @@ import { logger } from "./logger";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { execFile } from "child_process";
+import { MsEdgeTTS, OUTPUT_FORMAT } from "ms-edge-tts";
 
 let _groq: Groq | null = null;
 function getGroq(): Groq {
@@ -81,7 +81,7 @@ export async function transcribeAudio(filePath: string): Promise<string> {
 }
 
 /**
- * Genera un audio MP3 con voz masculina neural usando edge-tts.
+ * Genera un audio MP3 con voz masculina neural usando ms-edge-tts.
  * Voz: es-CO-GonzaloNeural (Colombia, masculino, muy natural)
  * Retorna la ruta del archivo temporal generado, o null si falla.
  */
@@ -90,39 +90,51 @@ export async function generateVoiceFile(text: string): Promise<string | null> {
     const cleanText = text.slice(0, 500).replace(/[*_~`#]/g, "");
     const outFile = path.join(os.tmpdir(), `dante_voice_${Date.now()}.mp3`);
     
-    await new Promise<void>((resolve, reject) => {
-      execFile(
-        "edge-tts",
-        ["--voice", "es-CO-GonzaloNeural", "--text", cleanText, "--write-media", outFile],
-        { timeout: 15000 },
-        (err) => {
-          if (err) reject(err);
-          else resolve();
-        }
-      );
+    const tts = new MsEdgeTTS();
+    await tts.setMetadata("es-CO-GonzaloNeural", OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
+    
+    const buffer = await new Promise<Buffer>((resolve, reject) => {
+      tts.toStream(cleanText)
+        .on("data", (data) => {
+          // Stream data handling if needed, but toStream returns a readable stream
+        });
+      
+      // Better: use the internal buffer or a promise wrapper if available
+      // The ms-edge-tts library usually has a simpler way or we can pipe it
+      const chunks: any[] = [];
+      const stream = tts.toStream(cleanText);
+      stream.on("data", (chunk) => chunks.push(chunk));
+      stream.on("end", () => resolve(Buffer.concat(chunks)));
+      stream.on("error", reject);
     });
 
-    if (fs.existsSync(outFile) && fs.statSync(outFile).size > 0) {
+    if (buffer && buffer.length > 0) {
+      fs.writeFileSync(outFile, buffer);
       return outFile;
     }
     return null;
   } catch (err) {
-    logger.error({ err }, "Error generando voz con edge-tts, intentando fallback...");
-    // Fallback: intentar con voz mexicana
+    logger.error({ err }, "Error generando voz con ms-edge-tts, intentando fallback...");
     try {
       const cleanText = text.slice(0, 300).replace(/[*_~`#]/g, "");
       const outFile = path.join(os.tmpdir(), `dante_voice_fallback_${Date.now()}.mp3`);
+      const tts = new MsEdgeTTS();
+      await tts.setMetadata("es-MX-JorgeNeural", OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
+      
+      const chunks: any[] = [];
+      const stream = tts.toStream(cleanText);
       await new Promise<void>((resolve, reject) => {
-        execFile(
-          "edge-tts",
-          ["--voice", "es-MX-JorgeNeural", "--text", cleanText, "--write-media", outFile],
-          { timeout: 15000 },
-          (err) => { if (err) reject(err); else resolve(); }
-        );
+        stream.on("data", (chunk) => chunks.push(chunk));
+        stream.on("end", () => {
+          fs.writeFileSync(outFile, Buffer.concat(chunks));
+          resolve();
+        });
+        stream.on("error", reject);
       });
-      if (fs.existsSync(outFile) && fs.statSync(outFile).size > 0) return outFile;
-    } catch (_) {}
-    return null;
+      return outFile;
+    } catch (_) {
+      return null;
+    }
   }
 }
 

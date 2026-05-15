@@ -14,6 +14,7 @@ export const settingsTable = pgTable("settings", {
   aiGreetingMessage: text("ai_greeting_message").default("Hola, soy la asistente virtual de Nexodent. ¿En qué puedo ayudarte hoy?"),
   aiSignature: text("ai_signature").default("Asistente Virtual - Nexodent"),
   autoConfirmAppointments: boolean("auto_confirm_appointments").notNull().default(false),
+  habilitationCode: text("habilitation_code"),
 });
 
 export const insertSettingsSchema = createInsertSchema(settingsTable).omit({ id: true });

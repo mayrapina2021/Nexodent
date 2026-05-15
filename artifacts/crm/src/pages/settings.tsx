@@ -32,6 +32,7 @@ type SettingsForm = {
   aiGreetingMessage: string;
   aiSignature: string;
   autoConfirmAppointments: boolean;
+  habilitationCode: string;
 };
 
 export default function Settings() {
@@ -58,6 +59,7 @@ export default function Settings() {
         aiGreetingMessage: settings.aiGreetingMessage ?? "",
         aiSignature: settings.aiSignature ?? "",
         autoConfirmAppointments: settings.autoConfirmAppointments ?? false,
+        habilitationCode: (settings as any).habilitationCode ?? "",
       });
     }
   }, [settings]);
@@ -81,6 +83,7 @@ export default function Settings() {
         aiGreetingMessage: form.aiGreetingMessage || undefined,
         aiSignature: form.aiSignature || undefined,
         autoConfirmAppointments: form.autoConfirmAppointments,
+        habilitationCode: form.habilitationCode || undefined,
       }
     }, {
       onSuccess: () => {
@@ -125,6 +128,10 @@ export default function Settings() {
                   <div className="space-y-1">
                     <Label>Teléfono de contacto</Label>
                     <Input value={form.clinicPhone} onChange={e => setForm(f => ({ ...f, clinicPhone: e.target.value }))} className="bg-background" placeholder="+57 604 000 0000" />
+                  </div>
+                  <div className="space-y-1 col-span-2">
+                    <Label>Código de Habilitación (RIPS)</Label>
+                    <Input value={form.habilitationCode} onChange={e => setForm(f => ({ ...f, habilitationCode: e.target.value }))} className="bg-background" placeholder="Ej: 050010000000" />
                   </div>
                 </div>
               </CardContent>
