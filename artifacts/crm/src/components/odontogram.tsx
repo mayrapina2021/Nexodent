@@ -2,17 +2,17 @@ import React, { useState } from "react";
 import { cn } from "@/lib/utils";
 
 type Surface = "top" | "bottom" | "left" | "right" | "center";
-type Tool = "caries" | "filling" | "missing" | "extract" | "none";
+type Status = "missing" | "extract" | "fracture" | "prosthesis" | "endodontics" | "none";
 
 interface ToothData {
   surfaces: Record<Surface, "red" | "blue" | "none">;
-  status: "missing" | "extract" | "none";
+  status: Status;
 }
 
 interface ToothProps {
   id: number;
   data: ToothData;
-  selectedTool: Tool;
+  selectedTool: string;
   onUpdate: (id: number, updated: ToothData) => void;
   readonly?: boolean;
 }
@@ -21,8 +21,9 @@ const Tooth = ({ id, data, selectedTool, onUpdate, readonly }: ToothProps) => {
   const handleClickSurface = (s: Surface) => {
     if (readonly) return;
     
-    // Si la herramienta es para el diente completo, delegamos a handleClickWhole
-    if (selectedTool === "missing" || selectedTool === "extract") {
+    // Tools that apply to the whole tooth
+    const wholeToothTools = ["missing", "extract", "fracture", "prosthesis", "endodontics"];
+    if (wholeToothTools.includes(selectedTool)) {
       handleClickWhole();
       return;
     }
@@ -38,47 +39,52 @@ const Tooth = ({ id, data, selectedTool, onUpdate, readonly }: ToothProps) => {
 
   const handleClickWhole = () => {
     if (readonly) return;
-    if (selectedTool === "missing") {
-      onUpdate(id, { ...data, status: data.status === "missing" ? "none" : "missing" });
-    } else if (selectedTool === "extract") {
-      onUpdate(id, { ...data, status: data.status === "extract" ? "none" : "extract" });
-    }
+    const currentStatus = data.status === selectedTool ? "none" : (selectedTool as Status);
+    onUpdate(id, { ...data, status: currentStatus });
   };
-
 
   const getSurfaceColor = (s: Surface) => {
     const val = data.surfaces[s];
-    if (val === "red") return "fill-red-500 stroke-red-600";
-    if (val === "blue") return "fill-blue-500 stroke-blue-600";
-    return "fill-transparent stroke-border";
+    if (val === "red") return "fill-red-500/80 stroke-red-600";
+    if (val === "blue") return "fill-blue-500/80 stroke-blue-600";
+    return "fill-transparent stroke-slate-300";
   };
 
   return (
     <div className="flex flex-col items-center gap-1 group">
-      <span className="text-[10px] font-bold text-muted-foreground group-hover:text-foreground transition-colors">{id}</span>
-      <div className="relative w-10 h-10 cursor-pointer select-none" onClick={handleClickWhole}>
-        <svg viewBox="0 0 100 100" className={cn("w-full h-full", data.status !== "none" && "opacity-40")}>
+      <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-900 transition-colors">{id}</span>
+      <div className="relative w-12 h-12 cursor-pointer select-none" onClick={handleClickWhole}>
+        <svg viewBox="0 0 100 100" className={cn("w-full h-full transform transition-transform hover:scale-105", data.status !== "none" && data.status !== "fracture" && "opacity-40")}>
           {/* Top (Vestibular) */}
-          <path d="M10,10 L90,10 L75,25 L25,25 Z" onClick={(e) => { e.stopPropagation(); handleClickSurface("top"); }} className={cn("cursor-pointer transition-colors hover:fill-muted", getSurfaceColor("top"))} />
+          <path d="M10,10 L90,10 L75,25 L25,25 Z" onClick={(e) => { e.stopPropagation(); handleClickSurface("top"); }} className={cn("cursor-pointer transition-colors hover:fill-slate-100", getSurfaceColor("top"))} />
           {/* Bottom (Lingual) */}
-          <path d="M10,90 L90,90 L75,75 L25,75 Z" onClick={(e) => { e.stopPropagation(); handleClickSurface("bottom"); }} className={cn("cursor-pointer transition-colors hover:fill-muted", getSurfaceColor("bottom"))} />
+          <path d="M10,90 L90,90 L75,75 L25,75 Z" onClick={(e) => { e.stopPropagation(); handleClickSurface("bottom"); }} className={cn("cursor-pointer transition-colors hover:fill-slate-100", getSurfaceColor("bottom"))} />
           {/* Left (Mesial) */}
-          <path d="M10,10 L10,90 L25,75 L25,25 Z" onClick={(e) => { e.stopPropagation(); handleClickSurface("left"); }} className={cn("cursor-pointer transition-colors hover:fill-muted", getSurfaceColor("left"))} />
+          <path d="M10,10 L10,90 L25,75 L25,25 Z" onClick={(e) => { e.stopPropagation(); handleClickSurface("left"); }} className={cn("cursor-pointer transition-colors hover:fill-slate-100", getSurfaceColor("left"))} />
           {/* Right (Distal) */}
-          <path d="M90,10 L90,90 L75,75 L75,25 Z" onClick={(e) => { e.stopPropagation(); handleClickSurface("right"); }} className={cn("cursor-pointer transition-colors hover:fill-muted", getSurfaceColor("right"))} />
+          <path d="M90,10 L90,90 L75,75 L75,25 Z" onClick={(e) => { e.stopPropagation(); handleClickSurface("right"); }} className={cn("cursor-pointer transition-colors hover:fill-slate-100", getSurfaceColor("right"))} />
           {/* Center (Occlusal) */}
-          <rect x="25" y="25" width="50" height="50" onClick={(e) => { e.stopPropagation(); handleClickSurface("center"); }} className={cn("cursor-pointer transition-colors hover:fill-muted", getSurfaceColor("center"))} />
+          <rect x="25" y="25" width="50" height="50" onClick={(e) => { e.stopPropagation(); handleClickSurface("center"); }} className={cn("cursor-pointer transition-colors hover:fill-slate-100", getSurfaceColor("center"))} />
         </svg>
         
         {data.status === "missing" && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="w-full h-0.5 bg-red-500 rotate-45 absolute" />
-            <div className="w-full h-0.5 bg-red-500 -rotate-45 absolute" />
+             <svg viewBox="0 0 100 100" className="w-full h-full text-red-600">
+                <line x1="10" y1="10" x2="90" y2="90" stroke="currentColor" strokeWidth="4" />
+                <line x1="90" y1="10" x2="10" y2="90" stroke="currentColor" strokeWidth="4" />
+             </svg>
           </div>
         )}
         {data.status === "extract" && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="w-full h-0.5 bg-blue-500 rotate-45 absolute" />
+             <svg viewBox="0 0 100 100" className="w-full h-full text-blue-600">
+                <line x1="10" y1="10" x2="90" y2="90" stroke="currentColor" strokeWidth="4" />
+             </svg>
+          </div>
+        )}
+        {data.status === "fracture" && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+             <div className="w-full h-0.5 bg-red-600 rotate-[30deg]" />
           </div>
         )}
       </div>
@@ -87,7 +93,8 @@ const Tooth = ({ id, data, selectedTool, onUpdate, readonly }: ToothProps) => {
 };
 
 export default function Odontogram({ data = {}, onChange, readonly }: any) {
-  const [selectedTool, setSelectedTool] = useState<Tool>("caries");
+  const [activeTab, setActiveTab] = useState("permanente");
+  const [selectedTool, setSelectedTool] = useState("caries");
 
   const upperTeeth = [
     [18, 17, 16, 15, 14, 13, 12, 11],
@@ -108,87 +115,82 @@ export default function Odontogram({ data = {}, onChange, readonly }: any) {
   };
 
   return (
-    <div className="p-6 bg-card/40 rounded-2xl border border-border/50 space-y-10 select-none backdrop-blur-sm">
-      {/* Herramientas de Marcado */}
-      {!readonly && (
-        <div className="flex flex-wrap items-center justify-center gap-2 p-2 bg-muted/20 rounded-xl border border-border/30">
-          <button 
-            onClick={() => setSelectedTool("caries")}
-            className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-all", selectedTool === "caries" ? "bg-red-500 text-white shadow-lg shadow-red-500/20" : "hover:bg-muted")}
+    <div className="p-8 bg-white rounded-xl shadow-2xl border border-slate-200 space-y-12 select-none overflow-x-auto min-w-[800px]">
+      {/* Tabs Superiores */}
+      <div className="flex bg-slate-100 p-1 rounded-lg w-fit mx-auto shadow-inner">
+        {["permanente", "temporal", "mixta"].map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={cn(
+              "px-6 py-2 rounded-md text-xs font-bold uppercase transition-all",
+              activeTab === tab ? "bg-indigo-600 text-white shadow-md" : "text-slate-500 hover:bg-slate-200"
+            )}
           >
-            🔴 Requerido (Caries)
+            {tab}
           </button>
-          <button 
-            onClick={() => setSelectedTool("filling")}
-            className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-all", selectedTool === "filling" ? "bg-blue-500 text-white shadow-lg shadow-blue-500/20" : "hover:bg-muted")}
-          >
-            🔵 Realizado (Obturado)
-          </button>
-          <button 
-            onClick={() => setSelectedTool("missing")}
-            className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-all", selectedTool === "missing" ? "bg-gray-800 text-white" : "hover:bg-muted")}
-          >
-            ❌ Ausente
-          </button>
-          <button 
-            onClick={() => setSelectedTool("extract")}
-            className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-all", selectedTool === "extract" ? "bg-amber-600 text-white" : "hover:bg-muted")}
-          >
-            ⚡ A Extraer
-          </button>
-          <div className="w-px h-6 bg-border/50 mx-2" />
-          <button 
-            onClick={() => setSelectedTool("none")}
-            className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-all", selectedTool === "none" ? "bg-white text-black" : "hover:bg-muted")}
-          >
-            🧹 Borrador
-          </button>
-        </div>
-      )}
+        ))}
+      </div>
 
-      <div className="space-y-12">
-        {/* Upper Arch */}
-        <div className="flex justify-center gap-8">
+      {/* Odontograma Visual */}
+      <div className="space-y-16 py-4">
+        <div className="flex justify-center gap-12 border-b border-slate-100 pb-12">
           {upperTeeth.map((quadrant, qIdx) => (
-            <div key={qIdx} className="flex gap-2">
+            <div key={qIdx} className="flex gap-3">
               {quadrant.map(id => (
-                <Tooth 
-                  key={id} 
-                  id={id} 
-                  data={getToothData(id)} 
-                  selectedTool={selectedTool} 
-                  onUpdate={handleUpdate} 
-                  readonly={readonly} 
-                />
+                <Tooth key={id} id={id} data={getToothData(id)} selectedTool={selectedTool} onUpdate={handleUpdate} readonly={readonly} />
               ))}
             </div>
           ))}
         </div>
         
-        {/* Lower Arch */}
-        <div className="flex justify-center gap-8">
+        <div className="flex justify-center gap-12">
           {lowerTeeth.map((quadrant, qIdx) => (
-            <div key={qIdx} className="flex gap-2">
+            <div key={qIdx} className="flex gap-3">
               {quadrant.map(id => (
-                <Tooth 
-                  key={id} 
-                  id={id} 
-                  data={getToothData(id)} 
-                  selectedTool={selectedTool} 
-                  onUpdate={handleUpdate} 
-                  readonly={readonly} 
-                />
+                <Tooth key={id} id={id} data={getToothData(id)} selectedTool={selectedTool} onUpdate={handleUpdate} readonly={readonly} />
               ))}
             </div>
           ))}
         </div>
       </div>
 
-      <div className="flex justify-center items-center gap-8 text-[10px] text-muted-foreground pt-4 border-t border-border/20">
-        <div className="flex items-center gap-2 italic">
-          💡 <span className="max-w-xs leading-tight">Selecciona una herramienta y haz clic en las superficies de los dientes para marcar.</span>
+      {/* Panel de Herramientas Estilo Profesional */}
+      {!readonly && (
+        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-6">
+          <div className="flex gap-1 bg-slate-200 p-1 rounded-xl w-fit">
+             <button className={cn("px-8 py-2 rounded-lg text-xs font-bold uppercase", selectedTool === "caries" ? "bg-indigo-600 text-white" : "text-slate-600")}>Requerido</button>
+             <button className={cn("px-8 py-2 rounded-lg text-xs font-bold uppercase", selectedTool === "filling" ? "bg-indigo-600 text-white" : "text-slate-600")}>Realizado</button>
+             <button className={cn("px-8 py-2 rounded-lg text-xs font-bold uppercase", selectedTool === "none" ? "bg-indigo-600 text-white" : "text-slate-600")}>Características</button>
+          </div>
+
+          <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+            {[
+              { id: "caries", label: "Caries 🔴", type: "surface" },
+              { id: "filling", label: "Obturado 🔵", type: "surface" },
+              { id: "missing", label: "Ausente /", type: "whole" },
+              { id: "extract", label: "A Extraer X", type: "whole" },
+              { id: "fracture", label: "Fractura ~", type: "whole" },
+              { id: "prosthesis", label: "Prótesis 🦷", type: "whole" },
+              { id: "endodontics", label: "Endodoncia 📍", type: "whole" },
+              { id: "none", label: "Limpiar 🧹", type: "none" },
+            ].map((tool) => (
+              <button
+                key={tool.id}
+                onClick={() => setSelectedTool(tool.id)}
+                className={cn(
+                  "p-3 rounded-xl text-[11px] font-bold border transition-all flex flex-col items-center justify-center gap-1",
+                  selectedTool === tool.id 
+                    ? "bg-white border-indigo-500 text-indigo-700 shadow-lg ring-2 ring-indigo-500/20" 
+                    : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                )}
+              >
+                {tool.label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
