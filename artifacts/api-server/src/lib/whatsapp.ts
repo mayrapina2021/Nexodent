@@ -217,7 +217,7 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo): Promise<void> 
   if (isAudio) {
     try {
       logger.info({ jid }, "Audio recibido — Iniciando transcripción...");
-      const buffer = await downloadMediaMessage(msg, "buffer", {}, { logger: logger as any, reuploadRequest: (sock as any).updateMediaMessage });
+      const buffer = await downloadMediaMessage(msg as any, "buffer", {}, { logger: logger as any, reuploadRequest: (sock as any).updateMediaMessage });
       const tmpFile = tmp.fileSync({ postfix: ".ogg" });
       const mp3File = tmp.fileSync({ postfix: ".mp3" });
       fs.writeFileSync(tmpFile.name, buffer as Buffer);
