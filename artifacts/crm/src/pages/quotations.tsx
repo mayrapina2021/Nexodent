@@ -250,15 +250,23 @@ export default function Quotations() {
               <div className="space-y-3 max-h-72 overflow-y-auto pr-2 custom-scrollbar">
                 {items.map((item, idx) => (
                   <div key={idx} className="flex gap-2 items-start bg-muted/10 p-2 rounded-lg border border-border/30">
-                    <div className="flex-1 space-y-1">
-                      <Select value={item.service} onValueChange={v => updateItem(idx, "service", v)}>
-                        <SelectTrigger className="bg-background">
-                          <SelectValue placeholder="Seleccionar servicio..." />
+                    <div className="flex-1 flex gap-2">
+                      <Input 
+                        placeholder="Servicio / Tratamiento" 
+                        value={item.service} 
+                        onChange={e => updateItem(idx, "service", e.target.value)}
+                        className="bg-background flex-1"
+                      />
+                      <Select onValueChange={v => updateItem(idx, "service", v)}>
+                        <SelectTrigger className="w-10 px-0 flex justify-center bg-muted/20">
+                          <Plus className="h-4 w-4" />
                         </SelectTrigger>
                         <SelectContent className="max-h-[250px] overflow-y-auto">
+                          <Label className="px-2 py-1.5 text-[10px] text-muted-foreground uppercase">Tratamientos guardados</Label>
                           {treatments?.map(t => (
-                            <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                            <SelectItem key={t.id} value={t.name}>{t.name} (${t.price})</SelectItem>
                           ))}
+                          {!treatments?.length && <div className="p-2 text-xs text-muted-foreground">No hay tratamientos guardados</div>}
                         </SelectContent>
                       </Select>
                     </div>

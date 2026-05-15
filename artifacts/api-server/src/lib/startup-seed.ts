@@ -1,4 +1,4 @@
-import { db, usersTable, aiKnowledgeTable, aiPersonalityTable, appointmentsTable, patientsTable, settingsTable } from "@workspace/db";
+import { db, usersTable, aiKnowledgeTable, aiPersonalityTable, appointmentsTable, patientsTable, settingsTable, treatmentsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -160,6 +160,20 @@ const PERSONALITY = {
   extraInstructions: "Nunca admitas ser un bot o IA. Eres Andrea, parte del equipo humano de Nexodent. Siempre menciona el consultorio en el primer mensaje.",
 };
 
+const TREATMENTS_SEED = [
+  { name: "Valoracion Inicial / Diagnostico", price: "50000", duration: 30, description: "Evaluacion completa de salud oral" },
+  { name: "Profilaxis (Limpieza Dental)", price: "80000", duration: 45, description: "Limpieza profesional con pulido" },
+  { name: "Resina Fotocurado (1 cara)", price: "120000", duration: 40, description: "Calza estetica en resina" },
+  { name: "Detartraje (Raspado de Sarro)", price: "150000", duration: 60, description: "Eliminacion de calculos dentales" },
+  { name: "Blanqueamiento en Consultorio", price: "400000", duration: 60, description: "Sesion de aclaramiento dental laser" },
+  { name: "Carilla en Resina Estetica", price: "350000", duration: 90, description: "Diseño de sonrisa por diente" },
+  { name: "Carilla en Disilicato (e.max)", price: "900000", duration: 60, description: "Carilla de alta estetica en ceramica" },
+  { name: "Corona en Zirconio Premium", price: "1200000", duration: 90, description: "Corona libre de metal alta resistencia" },
+  { name: "Endodoncia Anterior", price: "450000", duration: 90, description: "Tratamiento de conductos" },
+  { name: "Extraccion Simple", price: "150000", duration: 45, description: "Exodoncia no quirurgica" },
+  { name: "Implante de Titanio (Solo Cirugia)", price: "2500000", duration: 60, description: "Colocacion de implante dental" }
+];
+
 export async function runStartupSeed(): Promise<void> {
   logger.info("Ejecutando startup seed...");
 
@@ -218,6 +232,17 @@ export async function runStartupSeed(): Promise<void> {
         .set(nexodentSettings)
         .where(eq(settingsTable.id, existingSettings.id));
       logger.info("Clinic settings updated to Nexodent");
+    }
+
+    // ── Treatments Seed ───────────────────────────────────────────────────
+    const existingTreatments = await db.select().from(treatmentsTable).limit(1);
+    if (existingTreatments.length === 0) {
+      for (const t of TREATMENTS_SEED) {
+        await db.insert(treatmentsTable).values({ ...t, active: true });
+      }
+      logger.info({ count: TREATMENTS_SEED.length }, "Treatments seeded");
+    } else {
+      logger.info("Treatments already present, skipping seed");
     }
 
     // ── Sincronizar estados de pacientes con sus citas ───────────────────────
