@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, quotationsTable, evolutionNotesTable, patientsTable, settingsTable, odontogramsTable, consentFormsTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { db, quotationsTable, evolutionNotesTable, patientsTable, settingsTable, odontogramsTable, consentFormsTable, paymentsTable } from "@workspace/db";
+import { eq, desc, sum } from "drizzle-orm";
 import {
   CreateEvolutionNoteBody,
   CreateQuotationBody,
@@ -196,6 +196,39 @@ router.delete("/clinical/quotations/:id", async (req, res): Promise<void> => {
   res.json({ message: "Presupuesto eliminado correctamente" });
 });
 
+// ── Pagos / Abonos ──────────────────────────────────────────────────────────
+
+// GET /clinical/quotations/:id/payments — Ver todos los abonos de un presupuesto
+router.get("/clinical/quotations/:id/payments", async (req, res): Promise<void> => {
+  const quotationId = parseInt(req.params.id, 10);
+  const payments = await db.select().from(paymentsTable)
+    .where(eq(paymentsTable.quotationId, quotationId))
+    .orderBy(desc(paymentsTable.date));
+  res.json(payments);
+});
+
+// POST /clinical/payments — Registrar un nuevo abono
+router.post("/clinical/payments", async (req, res): Promise<void> => {
+  const { quotationId, amount, method, reference } = req.body;
+  if (!quotationId || !amount || !method) {
+    res.status(400).json({ error: "quotationId, amount y method son requeridos" });
+    return;
+  }
+  const [payment] = await db.insert(paymentsTable).values({
+    quotationId: parseInt(quotationId, 10),
+    amount: String(amount),
+    method,
+    reference: reference ?? null,
+  }).returning();
+  res.status(201).json(payment);
+});
+
+// DELETE /clinical/payments/:id — Eliminar un abono
+router.delete("/clinical/payments/:id", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  const [deleted] = await db.delete(paymentsTable).where(eq(paymentsTable.id, id)).returning();
+  if (!deleted) { res.status(404).json({ error: "Pago no encontrado" }); return; }
+  res.json({ message: "Abono eliminado" });
+});
 
 export default router;
-

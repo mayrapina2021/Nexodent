@@ -770,6 +770,46 @@ paths:
               schema:
                 $ref: "#/components/schemas/Settings"
 
+  /clinical/payments:
+    post:
+      operationId: createPayment
+      tags: [clinical]
+      summary: Register a payment for a quotation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentBody"
+      responses:
+        "201":
+          description: Payment registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+
+  /clinical/quotations/{id}/payments:
+    get:
+      operationId: getQuotationPayments
+      tags: [clinical]
+      summary: Get all payments for a specific quotation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of payments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Payment"
+
 components:
   schemas:
     HealthStatus:
@@ -1321,3 +1361,34 @@ components:
           type: string
         autoConfirmAppointments:
           type: boolean
+
+    Payment:
+      type: object
+      properties:
+        id:
+          type: integer
+        quotationId:
+          type: integer
+        amount:
+          type: number
+        method:
+          type: string
+        reference:
+          type: string
+        date:
+          type: string
+          format: date-time
+      required: [id, quotationId, amount, method, date]
+
+    CreatePaymentBody:
+      type: object
+      properties:
+        quotationId:
+          type: integer
+        amount:
+          type: number
+        method:
+          type: string
+        reference:
+          type: string
+      required: [quotationId, amount, method]

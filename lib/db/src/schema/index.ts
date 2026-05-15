@@ -11,3 +11,6 @@ export * from "./whatsapp-auth";
 export * from "./automation-history";
 export * from "./clinical";
 export * from "./inventory";
+export * from "./payments";
+export * from "./lab-orders";
+export * from "./clinical-docs";

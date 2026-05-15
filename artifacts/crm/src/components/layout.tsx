@@ -29,6 +29,8 @@ const mainNav = [
   { href: "/patients", label: "Pacientes", icon: Users },
   { href: "/appointments", label: "Agenda", icon: CalendarIcon },
   { href: "/quotations", label: "Presupuestos", icon: FileText },
+  { href: "/treatments", label: "Tratamientos", icon: Syringe },
+  { href: "/inventory", label: "Inventario", icon: Package },
   { href: "/conversations", label: "Chat", icon: MessageSquare },
 ];
 
@@ -36,8 +38,6 @@ const mainNav = [
 const moreNav = [
   { href: "/whatsapp", label: "WhatsApp", icon: Smartphone },
   { href: "/automations", label: "Automatizaciones", icon: Workflow },
-  { href: "/treatments", label: "Tratamientos", icon: Syringe },
-  { href: "/inventory", label: "Inventario", icon: Package },
   { href: "/ai-training", label: "Entrenar IA", icon: Brain },
   { href: "/settings", label: "Configuración", icon: SettingsIcon },
 ];
