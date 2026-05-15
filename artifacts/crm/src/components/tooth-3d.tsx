@@ -1,54 +1,87 @@
 import { useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Float, MeshDistortMaterial, MeshWobbleMaterial, OrbitControls, Stage } from "@react-three/drei";
+import { Float, OrbitControls, Environment, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
 
-function ToothModel() {
-  const meshRef = useRef<THREE.Mesh>(null);
+function ToothMolar() {
+  const groupRef = useRef<THREE.Group>(null);
 
-  // Animación suave de rotación
   useFrame((state) => {
-    if (meshRef.current) {
-      meshRef.current.rotation.y += 0.01;
-      meshRef.current.position.y = Math.sin(state.clock.getElapsedTime()) * 0.2;
+    if (groupRef.current) {
+      groupRef.current.rotation.y += 0.005;
+      groupRef.current.position.y = Math.sin(state.clock.getElapsedTime()) * 0.1;
     }
   });
 
+  const material = new THREE.MeshStandardMaterial({
+    color: "#ffffff",
+    roughness: 0.1,
+    metalness: 0.2,
+    emissive: "#ffffff",
+    emissiveIntensity: 0.05,
+  });
+
   return (
-    <mesh ref={meshRef} scale={1.5}>
-      {/* 
-        Simulamos una muela con una geometría de cápsula distorsionada 
-        hasta que podamos cargar un modelo .glb específico. 
-        Esto crea un efecto "orgánico" y tecnológico muy premium.
-      */}
-      <capsuleGeometry args={[0.5, 0.7, 4, 32]} />
-      <MeshDistortMaterial 
-        color="#88ccff" 
-        speed={2} 
-        distort={0.3} 
-        radius={1} 
-        emissive="#0055ff"
-        emissiveIntensity={0.5}
-        roughness={0.1}
-        metalness={0.8}
-      />
-    </mesh>
+    <group ref={groupRef} scale={1.8}>
+      {/* Corona de la muela (Parte superior) */}
+      <mesh position={[0, 0.4, 0]}>
+        <boxGeometry args={[0.8, 0.6, 0.8]} />
+        <primitive object={material} attach="material" />
+      </mesh>
+      {/* Cúspides (Detalle superior) */}
+      <mesh position={[0.2, 0.7, 0.2]}>
+        <sphereGeometry args={[0.25, 16, 16]} />
+        <primitive object={material} attach="material" />
+      </mesh>
+      <mesh position={[-0.2, 0.7, 0.2]}>
+        <sphereGeometry args={[0.25, 16, 16]} />
+        <primitive object={material} attach="material" />
+      </mesh>
+      <mesh position={[0.2, 0.7, -0.2]}>
+        <sphereGeometry args={[0.25, 16, 16]} />
+        <primitive object={material} attach="material" />
+      </mesh>
+      <mesh position={[-0.2, 0.7, -0.2]}>
+        <sphereGeometry args={[0.25, 16, 16]} />
+        <primitive object={material} attach="material" />
+      </mesh>
+
+      {/* Raíces (Parte inferior) */}
+      <mesh position={[0.2, -0.1, 0]} rotation={[0, 0, -0.2]}>
+        <cylinderGeometry args={[0.25, 0.1, 0.8, 16]} />
+        <primitive object={material} attach="material" />
+      </mesh>
+      <mesh position={[-0.2, -0.1, 0]} rotation={[0, 0, 0.2]}>
+        <cylinderGeometry args={[0.25, 0.1, 0.8, 16]} />
+        <primitive object={material} attach="material" />
+      </mesh>
+    </group>
   );
 }
 
 export default function ToothScene() {
   return (
-    <div className="w-full h-[400px] cursor-grab active:cursor-grabbing">
-      <Canvas camera={{ position: [0, 0, 3], fov: 50 }}>
-        <ambientLight intensity={0.5} />
-        <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} />
-        <pointLight position={[-10, -10, -10]} color="blue" />
+    <div className="w-full h-[500px] cursor-grab active:cursor-grabbing">
+      <Canvas camera={{ position: [0, 0, 4], fov: 45 }}>
+        <ambientLight intensity={0.8} />
+        <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={2} />
+        <pointLight position={[-10, -10, -10]} color="#3b82f6" intensity={1} />
         
-        <Float speed={2} rotationIntensity={1} floatIntensity={1}>
-          <ToothModel />
+        <Environment preset="city" />
+
+        <Float speed={1.5} rotationIntensity={0.5} floatIntensity={0.5}>
+          <ToothMolar />
         </Float>
 
-        <OrbitControls enableZoom={false} autoRotate autoRotateSpeed={0.5} />
+        <ContactShadows 
+          position={[0, -1.5, 0]} 
+          opacity={0.4} 
+          scale={10} 
+          blur={2} 
+          far={4.5} 
+        />
+
+        <OrbitControls enableZoom={false} autoRotate={false} />
       </Canvas>
     </div>
   );
