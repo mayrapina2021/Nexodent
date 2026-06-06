@@ -5,6 +5,11 @@ import { PassThrough } from "stream";
 import fs from "fs";
 import { logger } from "./logger";
 
+/** Dante — voz masculina colombiana, tono cercano y natural. */
+const DANTE_VOICE = "es-CO-GonzaloNeural";
+const DANTE_RATE = "+4%";
+const DANTE_PITCH = "-2%";
+
 if (ffmpegStatic && fs.existsSync(ffmpegStatic)) {
   ffmpeg.setFfmpegPath(ffmpegStatic);
 } else {
@@ -14,10 +19,9 @@ if (ffmpegStatic && fs.existsSync(ffmpegStatic)) {
 export async function synthesizeAudio(text: string): Promise<{ buffer: Buffer; mimetype: string }> {
   try {
     const tts = new MsEdgeTTS();
-    await tts.setMetadata("es-CO-SalomeNeural", OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
-    
-    // Slightly increased rate (+6%) for a more agile but natural conversation
-    const { audioStream } = tts.toStream(text, { rate: "+6%", pitch: "+0%" });
+    await tts.setMetadata(DANTE_VOICE, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
+
+    const { audioStream } = tts.toStream(text, { rate: DANTE_RATE, pitch: DANTE_PITCH });
     
     const mp3Buffer = await new Promise<Buffer>((resolve, reject) => {
       const chunks: Buffer[] = [];
