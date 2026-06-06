@@ -3,8 +3,7 @@ import { useListPatients, useCreatePatient, useUpdatePatient, useDeletePatient, 
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, Pencil, Trash2, Phone, Mail, Calendar, ClipboardList } from "lucide-react";
-import PatientClinicalDialog from "@/components/patient-clinical-dialog";
-
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -78,7 +77,7 @@ export default function Patients() {
   const [cityFilter, setCityFilter] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [clinicalPatient, setClinicalPatient] = useState<any | null>(null);
+  const [, setLocation] = useLocation();
   const [form, setForm] = useState<PatientForm>(emptyForm);
 
   const queryClient = useQueryClient();
@@ -289,10 +288,10 @@ export default function Patients() {
                       variant="secondary" 
                       size="sm" 
                       className="w-full bg-accent/10 text-accent hover:bg-accent/20 border-accent/20"
-                      onClick={() => setClinicalPatient(p)}
+                      onClick={() => setLocation(`/clinical/${p.id}`)}
                     >
                       <ClipboardList className="h-3.5 w-3.5 mr-1" />
-                      Ficha Clínica
+                      Historia Clínica
                     </Button>
                   </div>
 
@@ -424,11 +423,6 @@ export default function Patients() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <PatientClinicalDialog 
-        patient={clinicalPatient} 
-        open={!!clinicalPatient} 
-        onOpenChange={o => !o && setClinicalPatient(null)} 
-      />
     </Layout>
 
   );

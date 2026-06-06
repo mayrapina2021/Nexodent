@@ -16,6 +16,7 @@ import {
   listConsents,
   createConsent,
   createSoapNote,
+  useUpdatePatient,
 } from "@workspace/api-client-react";
 import Layout from "@/components/layout";
 import { Odontogram, ToothData } from "@/components/odontogram";
@@ -27,7 +28,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Save, History, FileText, ClipboardList, ReceiptText, FileDown, Image, Mic } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Plus, Save, History, FileText, ClipboardList, ReceiptText, FileDown, Image, Mic, Stethoscope, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
@@ -46,6 +48,9 @@ export default function ClinicalHistory() {
   const [consentType, setConsentType] = useState("general");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [galleryCategory, setGalleryCategory] = useState("evolution");
+  const [diagnosis, setDiagnosis] = useState("");
+  const [treatmentPlan, setTreatmentPlan] = useState("");
+  const updatePatient = useUpdatePatient();
 
   const { data: patient } = useQuery({
     queryKey: ["patient", patientId],
@@ -87,6 +92,13 @@ export default function ClinicalHistory() {
     queryKey: ["settings"],
     queryFn: () => getSettings(),
   });
+
+  React.useEffect(() => {
+    if (patient) {
+      setDiagnosis(patient.diagnosis ?? "");
+      setTreatmentPlan(patient.medicalHistory ?? "");
+    }
+  }, [patient]);
 
   const updateOdontogramMutation = useMutation({
     mutationFn: (data: { data: Record<string, ToothData> }) => updateOdontogram(patientId, data),
@@ -251,6 +263,9 @@ export default function ClinicalHistory() {
       <div className="flex flex-col gap-6 p-6">
         <div className="flex justify-between items-start flex-wrap gap-4">
           <div>
+            <Button variant="ghost" size="sm" className="mb-2 -ml-2 gap-1" onClick={() => setLocation("/patients")}>
+              <ArrowLeft className="w-4 h-4" /> Volver a Pacientes
+            </Button>
             <h1 className="text-3xl font-bold tracking-tight">Historia Clínica</h1>
             <p className="text-muted-foreground">
               Paciente: <span className="font-semibold text-foreground">{patient.name}</span> • ID: {patient.id}
@@ -267,9 +282,11 @@ export default function ClinicalHistory() {
         </div>
 
         <Tabs defaultValue="odontogram" className="w-full">
-          <TabsList className="flex flex-wrap h-auto gap-1">
+          <TabsList className="flex flex-wrap h-auto gap-1 w-full justify-start">
             <TabsTrigger value="odontogram" className="gap-1"><ClipboardList className="w-4 h-4" /> Odontograma</TabsTrigger>
             <TabsTrigger value="periodontogram" className="gap-1"><ClipboardList className="w-4 h-4" /> Periodontograma</TabsTrigger>
+            <TabsTrigger value="diagnosis" className="gap-1"><Stethoscope className="w-4 h-4" /> Diagnóstico</TabsTrigger>
+            <TabsTrigger value="plan" className="gap-1"><FileText className="w-4 h-4" /> Plan</TabsTrigger>
             <TabsTrigger value="evolution" className="gap-1"><History className="w-4 h-4" /> Evolución</TabsTrigger>
             <TabsTrigger value="gallery" className="gap-1"><Image className="w-4 h-4" /> Galería</TabsTrigger>
             <TabsTrigger value="documents" className="gap-1"><FileText className="w-4 h-4" /> Consentimientos</TabsTrigger>
@@ -298,6 +315,30 @@ export default function ClinicalHistory() {
                   data={((perioData as { data?: Record<string, PeriodontalToothData> })?.data) || {}}
                   onChange={handlePerioChange}
                 />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="diagnosis" className="mt-6">
+            <Card>
+              <CardHeader><CardTitle>Diagnóstico Clínico</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <Textarea value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} className="min-h-[200px]" placeholder="Estado general y hallazgos..." />
+                <Button onClick={() => updatePatient.mutate({ id: patientId, data: { diagnosis } }, { onSuccess: () => toast({ title: "Diagnóstico guardado" }) })}>
+                  <Save className="w-4 h-4 mr-1" /> Guardar
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="plan" className="mt-6">
+            <Card>
+              <CardHeader><CardTitle>Plan de Tratamiento</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <Textarea value={treatmentPlan} onChange={(e) => setTreatmentPlan(e.target.value)} className="min-h-[200px]" placeholder="Pasos recomendados..." />
+                <Button onClick={() => updatePatient.mutate({ id: patientId, data: { medicalHistory: treatmentPlan } }, { onSuccess: () => toast({ title: "Plan guardado" }) })}>
+                  <Save className="w-4 h-4 mr-1" /> Guardar
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>
