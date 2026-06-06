@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
-import { getWAState, sendWAMessage, disconnectWA, getBotEnabled, setBotEnabled, startWhatsApp } from "../lib/whatsapp";
+import { getWAState, sendWAMessage, disconnectWA, getBotEnabled, setBotEnabled, startWhatsApp, getWhatsAppStatus } from "../lib/whatsapp";
+import { getWaDebugEvents } from "../lib/wa-debug";
 
 const router: IRouter = Router();
 
@@ -35,6 +36,19 @@ router.get("/whatsapp/qr", noCache, (_req, res): void => {
 
 router.get("/whatsapp/bot-status", (_req, res): void => {
   res.json({ botEnabled: getBotEnabled() });
+});
+
+router.get("/whatsapp/debug", noCache, (_req, res): void => {
+  const state = getWAState();
+  res.json({
+    status: state.status,
+    connected: state.connected,
+    phone: state.phone,
+    connectedAt: state.connectedAt,
+    botEnabled: state.botEnabled,
+    socketStatus: getWhatsAppStatus(),
+    events: getWaDebugEvents(),
+  });
 });
 
 router.post("/whatsapp/bot-toggle", (req, res): void => {

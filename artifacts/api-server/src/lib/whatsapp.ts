@@ -1,11 +1,12 @@
 import makeWASocket, {
   DisconnectReason,
+  fetchLatestBaileysVersion,
   proto,
   type WASocket,
 } from "@whiskeysockets/baileys";
 import { Boom } from "@hapi/boom";
 import QRCode from "qrcode";
-import { db, conversationsTable, messagesTable, patientsTable, settingsTable } from "@workspace/db";
+import { db, conversationsTable, messagesTable, settingsTable } from "@workspace/db";
 import { eq, sql, or, and, desc } from "drizzle-orm";
 import { generateAIResponse } from "./groq";
 import { processAISendDocuments } from "./ai-send-documents";
@@ -18,6 +19,7 @@ import { amendAiMessageIfBookingFailed } from "./booking-message";
 import { parseIncomingContact, resolveOutboundJid, phoneToJidIfValid } from "./jid-utils";
 import { resolveConversationIdentity, isValidColombianPhone } from "./conversation-patient-sync";
 import { parseWhatsAppMessage } from "./whatsapp-message-parser";
+import { waDebug } from "./wa-debug";
 
 export interface WAState {
   connected: boolean;
@@ -26,15 +28,6 @@ export interface WAState {
   status: "connected" | "disconnected" | "connecting" | "waiting_qr";
   qrDataUrl: string | null;
   botEnabled: boolean;
-}
-
-const APPEND_MAX_AGE_SEC = 3600;
-
-function isRecentWhatsAppMessage(msg: proto.IWebMessageInfo): boolean {
-  const ts = Number(msg.messageTimestamp ?? 0);
-  if (!ts) return true;
-  const ageSec = Date.now() / 1000 - ts;
-  return ageSec >= -120 && ageSec <= APPEND_MAX_AGE_SEC;
 }
 
 const _messageStore = new Map<string, proto.IMessage>();
@@ -53,6 +46,7 @@ function cacheMessage(msg: proto.IWebMessageInfo): void {
     if (first) _messageStore.delete(first);
   }
 }
+
 const _processedMsgIds = new Set<string>();
 
 function markProcessed(msgId: string): void {
@@ -68,6 +62,7 @@ function wasProcessedInMemory(msgId: string): boolean {
 }
 
 let sock: WASocket | null = null;
+let startPromise: Promise<void> | null = null;
 let _state: WAState = {
   connected: false,
   phone: null,
@@ -150,11 +145,24 @@ export async function sendMessageToPhone(phone: string, text: string): Promise<b
   return sendWAMessage(jid, text);
 }
 
-export async function disconnectWA(): Promise<void> {
-  if (sock) {
-    try { await sock.logout(); } catch {}
-    sock = null;
+async function teardownSocket(): Promise<void> {
+  if (!sock) return;
+  const old = sock;
+  sock = null;
+  try {
+    old.ev.removeAllListeners("connection.update");
+    old.ev.removeAllListeners("messages.upsert");
+    old.ev.removeAllListeners("messages.update");
+    old.ev.removeAllListeners("creds.update");
+    await old.end(undefined);
+  } catch (err) {
+    logger.warn({ err }, "Error cerrando socket WhatsApp anterior");
   }
+  waDebug("socket_teardown");
+}
+
+export async function disconnectWA(): Promise<void> {
+  await teardownSocket();
   try {
     const { clearAuth } = await usePostgresAuthState();
     await clearAuth();
@@ -167,6 +175,7 @@ export async function disconnectWA(): Promise<void> {
     qrDataUrl: null,
     botEnabled: _state.botEnabled,
   };
+  waDebug("disconnected_manual");
 }
 
 async function findMessageByWhatsappId(whatsappMsgId: string) {
@@ -253,7 +262,10 @@ async function resolveOrCreateConversation(
   };
 }
 
-async function handleIncomingMessage(msg: proto.IWebMessageInfo, source: "notify" | "append" = "notify"): Promise<void> {
+async function handleIncomingMessage(
+  msg: proto.IWebMessageInfo,
+  source: string = "notify",
+): Promise<void> {
   if (!msg.key) return;
 
   cacheMessage(msg);
@@ -264,9 +276,7 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo, source: "notify
   const fromMe = msg.key.fromMe === true;
   const msgId = msg.key.id ?? "";
 
-  if (msgId && wasProcessedInMemory(msgId)) {
-    return;
-  }
+  if (msgId && wasProcessedInMemory(msgId)) return;
 
   if (msgId) {
     const existing = await findMessageByWhatsappId(msgId);
@@ -277,17 +287,15 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo, source: "notify
   }
 
   if (!msg.message) {
-    logger.info({ msgId, source, jid }, "Mensaje sin contenido aún (esperando update)");
-    return;
-  }
-
-  if (source === "append" && !isRecentWhatsAppMessage(msg)) {
-    logger.info({ msgId, jid: msg.key?.remoteJid }, "Mensaje append muy antiguo ignorado");
+    waDebug("message_pending_decrypt", { msgId, source, jid, fromMe });
     return;
   }
 
   const contact = parseIncomingContact(msg);
-  if (!contact) return;
+  if (!contact) {
+    waDebug("contact_parse_failed", { msgId, jid });
+    return;
+  }
 
   const { whatsappJid, phone: formattedPhone } = contact;
   const phone = formattedPhone.replace(/^\+/, "");
@@ -295,21 +303,26 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo, source: "notify
 
   const globalBotEnabled = await syncBotEnabled();
   const [existingConv] = await db.select().from(conversationsTable)
-    .where(or(eq(conversationsTable.phone, formattedPhone), eq(conversationsTable.phone, phone)))
+    .where(or(
+      eq(conversationsTable.phone, formattedPhone),
+      eq(conversationsTable.phone, phone),
+      eq(conversationsTable.whatsappJid, whatsappJid),
+    ))
     .orderBy(sql`${conversationsTable.lastMessageAt} desc nulls last`);
 
   const shouldTranscribeAudio = !fromMe && globalBotEnabled && (!existingConv || existingConv.aiMode);
 
   const parsed = await parseWhatsAppMessage(msg, sock, { transcribeAudio: shouldTranscribeAudio });
   if (!parsed?.text.trim() && !parsed?.mediaData) {
-    logger.warn({ msgId, source, jid, phone: formattedPhone }, "Mensaje sin texto ni media parseable");
+    waDebug("message_unparseable", { msgId, source, jid, phone: formattedPhone });
     return;
   }
 
   const text = parsed.text.trim() || (parsed.mediaData ? parsed.text : "");
   if (!text && !parsed.mediaData) return;
 
-  logger.info({ jid, fromMe, text, messageType: parsed.messageType }, "Mensaje de WhatsApp recibido");
+  waDebug("message_received", { msgId, source, jid, phone: formattedPhone, fromMe, preview: text.slice(0, 80) });
+  logger.info({ jid, fromMe, text, messageType: parsed.messageType, source }, "Mensaje de WhatsApp recibido");
 
   try {
     let conv = await resolveOrCreateConversation(whatsappJid, formattedPhone, phone, pushName);
@@ -346,6 +359,7 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo, source: "notify
 
     if (msgId) markProcessed(msgId);
 
+    waDebug("message_saved", { msgId, conversationId: conv.id, phone: formattedPhone });
     logger.info({ msgId, source, conversationId: conv.id, phone: formattedPhone, text: preview }, "Mensaje guardado en CRM");
 
     await db.update(conversationsTable).set({
@@ -363,8 +377,6 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo, source: "notify
     const [latestConv] = await db.select().from(conversationsTable).where(eq(conversationsTable.id, conv.id));
     const aiEnabled = latestConv?.aiMode === true && globalBotEnabled === true;
 
-    logger.info({ phone: formattedPhone, aiMode: latestConv?.aiMode, globalBotEnabled, aiEnabled }, "Evaluando si responder con IA");
-
     if (!aiEnabled) return;
 
     let aiText = "";
@@ -372,7 +384,7 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo, source: "notify
       const availableSlots = await getAvailableSlots();
       const aiResult = await generateAIResponse(conv.id, text, {
         availableSlots,
-        contactPhone: formattedPhone,
+        contactPhone: isValidColombianPhone(formattedPhone) ? formattedPhone : undefined,
       });
 
       try {
@@ -383,7 +395,7 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo, source: "notify
             patientName: conv.patientName,
             phone: formattedPhone,
           },
-          formattedPhone,
+          isValidColombianPhone(formattedPhone) ? formattedPhone : conv.phone,
           aiResult.actions,
           "whatsapp",
           { patientMessage: text },
@@ -424,52 +436,53 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo, source: "notify
 
       const outboundJid = conv.whatsappJid ?? whatsappJid;
       if (sock && outboundJid) {
-        logger.info({ jid: outboundJid, status: _state.status, wasAudio: parsed.wasAudio }, "Intentando enviar respuesta IA a WhatsApp...");
         try {
           if (parsed.wasAudio) {
-            logger.info({ jid: outboundJid }, "Sintetizando audio (TTS) para responder nota de voz");
             const audioResponse = await synthesizeAudio(aiText);
             await sock.sendMessage(outboundJid, {
               audio: audioResponse.buffer,
               mimetype: audioResponse.mimetype,
               ptt: true,
             });
-            logger.info({ jid: outboundJid, mimetype: audioResponse.mimetype }, "Respuesta IA enviada exitosamente como nota de voz");
           } else {
             await sock.sendMessage(outboundJid, { text: aiText });
-            logger.info({ jid: outboundJid, aiText }, "Respuesta IA enviada exitosamente como texto");
           }
+          waDebug("ai_reply_sent", { jid: outboundJid, conversationId: conv.id });
         } catch (wsErr) {
           logger.error({ wsErr, jid: outboundJid }, "Error al enviar mensaje a través de WhatsApp Socket");
+          waDebug("ai_reply_failed", { jid: outboundJid, error: String(wsErr) });
         }
-      } else {
-        logger.error({ jid: outboundJid, status: _state.status }, "CRÍTICO: No se pudo enviar mensaje (sock o JID inválido)");
       }
     }
   } catch (err) {
     logger.error({ err }, "Error procesando mensaje entrante");
+    waDebug("message_error", { error: String(err), msgId });
   }
 }
 
-export async function startWhatsApp(): Promise<void> {
+async function startWhatsAppImpl(): Promise<void> {
+  await teardownSocket();
   _state.status = "connecting";
   await syncBotEnabled();
 
   const { state: authState, saveCreds } = await usePostgresAuthState();
+  const { version } = await fetchLatestBaileysVersion();
 
   sock = makeWASocket({
+    version,
     auth: authState,
     printQRInTerminal: false,
     logger: logger.child({ module: "baileys" }) as any,
     browser: ["Nexodent", "Chrome", "120.0.0"],
     connectTimeoutMs: 60000,
     defaultQueryTimeoutMs: 60000,
-    keepAliveIntervalMs: 25000,
+    keepAliveIntervalMs: 20000,
     retryRequestDelayMs: 1000,
-    maxMsgRetryCount: 3,
+    maxMsgRetryCount: 5,
     syncFullHistory: false,
-    markOnlineOnConnect: false,
+    markOnlineOnConnect: true,
     receivedPendingNotifications: true,
+    emitOwnEvents: false,
     getMessage: async (key) => {
       const k = messageStoreKey(key);
       return k ? _messageStore.get(k) : undefined;
@@ -485,6 +498,7 @@ export async function startWhatsApp(): Promise<void> {
       try {
         _state.qrDataUrl = await QRCode.toDataURL(qr, { width: 300, margin: 2 });
         _state.status = "waiting_qr";
+        waDebug("qr_generated");
         logger.info("QR de WhatsApp generado");
       } catch (err) {
         logger.error({ err }, "Error generando QR");
@@ -496,6 +510,9 @@ export async function startWhatsApp(): Promise<void> {
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
       const prevBotEnabled = _state.botEnabled;
 
+      waDebug("connection_close", { statusCode, shouldReconnect });
+      await teardownSocket();
+
       _state.connected = false;
       _state.qrDataUrl = null;
       _state.status = "disconnected";
@@ -503,7 +520,7 @@ export async function startWhatsApp(): Promise<void> {
 
       if (shouldReconnect) {
         logger.info({ statusCode }, "WhatsApp desconectado, reconectando...");
-        setTimeout(() => startWhatsApp(), 3000);
+        setTimeout(() => { startWhatsApp().catch((err) => logger.error({ err }, "Error reconectando WA")); }, 4000);
       } else {
         logger.info("WhatsApp cerro sesion (loggedOut)");
         usePostgresAuthState().then(({ clearAuth }) => clearAuth()).catch(() => {});
@@ -522,19 +539,16 @@ export async function startWhatsApp(): Promise<void> {
         qrDataUrl: null,
         botEnabled: prevBotEnabled,
       };
+      waDebug("connection_open", { phone: _state.phone });
       logger.info({ phone: _state.phone }, "WhatsApp conectado exitosamente");
-      setTimeout(() => {
-        logger.info("Sincronizando mensajes pendientes tras conexión...");
-      }, 2000);
     }
   });
 
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
-    if (type !== "notify" && type !== "append") return;
-    logger.info({ type, count: messages.length }, "messages.upsert recibido");
+    waDebug("upsert_batch", { type, count: messages.length });
     for (const msg of messages) {
       try {
-        await handleIncomingMessage(msg, type);
+        await handleIncomingMessage(msg, type ?? "notify");
       } catch (err) {
         logger.error({ err, type, msgId: msg.key?.id }, "Error en messages.upsert");
       }
@@ -543,7 +557,9 @@ export async function startWhatsApp(): Promise<void> {
 
   sock.ev.on("messages.update", async (updates) => {
     for (const { key, update } of updates) {
-      if (!key?.id || !update.message) continue;
+      if (!key?.id) continue;
+      const patch = update as { message?: proto.IMessage; messageTimestamp?: number; pushName?: string };
+      if (!patch.message) continue;
       if (wasProcessedInMemory(key.id)) continue;
       const existing = await findMessageByWhatsappId(key.id);
       if (existing) {
@@ -553,14 +569,22 @@ export async function startWhatsApp(): Promise<void> {
       try {
         const fullMsg: proto.IWebMessageInfo = {
           key,
-          message: update.message,
-          messageTimestamp: update.messageTimestamp,
-          pushName: update.pushName,
+          message: patch.message,
+          messageTimestamp: patch.messageTimestamp,
+          pushName: patch.pushName,
         };
-        await handleIncomingMessage(fullMsg, "notify");
+        await handleIncomingMessage(fullMsg, "update");
       } catch (err) {
         logger.error({ err, msgId: key.id }, "Error en messages.update");
       }
     }
   });
+}
+
+export async function startWhatsApp(): Promise<void> {
+  if (startPromise) return startPromise;
+  startPromise = startWhatsAppImpl().finally(() => {
+    startPromise = null;
+  });
+  return startPromise;
 }
