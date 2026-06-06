@@ -111,6 +111,131 @@ ${lines.join("\n")}
 `;
 }
 
+type TreatmentRow = { name: string; price: string | number };
+
+const TREATMENT_TOPIC_KEYWORDS: { tags: string[]; keywords: string[] }[] = [
+  { tags: ["profilaxis", "limpieza"], keywords: ["profilaxis", "limpieza", "higiene"] },
+  { tags: ["valoracion", "diagnostico"], keywords: ["valoracion", "valoración", "diagnostico", "diagnóstico", "consulta inicial"] },
+  { tags: ["implante"], keywords: ["implante", "implan"] },
+  { tags: ["blanqueamiento"], keywords: ["blanquea", "whitening", "aclar"] },
+  { tags: ["carilla", "sonrisa"], keywords: ["carilla", "sonrisa", "estetica", "estética"] },
+  { tags: ["ortodoncia"], keywords: ["ortodoncia", "bracket", "frenillo", "alineador"] },
+  { tags: ["corona"], keywords: ["corona", "zirconio"] },
+  { tags: ["endodoncia"], keywords: ["endodoncia", "conducto", "nervio"] },
+  { tags: ["extraccion"], keywords: ["extraccion", "extracción", "exodoncia"] },
+  { tags: ["resina"], keywords: ["resina", "caries", "obturac"] },
+  { tags: ["detartraje"], keywords: ["detartraje", "sarro", "calculo", "cálculo"] },
+];
+
+function combinedSearchText(message: string, history: { role: string; content: string }[]): string {
+  const recent = history.slice(-6).map((m) => m.content).join(" ");
+  return `${message} ${recent}`.toLowerCase();
+}
+
+function wantsFullServiceCatalog(text: string): boolean {
+  return /(?:qué servicios|que servicios|qué ofrecen|que ofrecen|qué tratamientos|que tratamientos|todos los servicios|catálogo|catalogo|lista de servicios)/.test(text);
+}
+
+function buildRelevantTreatmentsContext(
+  allTreatments: TreatmentRow[],
+  searchText: string,
+): string {
+  if (!allTreatments.length) return "";
+
+  if (wantsFullServiceCatalog(searchText)) {
+    const sample = allTreatments.slice(0, 5).map((t) => `- ${t.name}: ${Number(t.price).toLocaleString()} pesos`).join("\n");
+    return `
+REFERENCIA INTERNA (el paciente pidió catálogo — resume en 2-3 líneas, NO copies esta lista completa):
+${sample}
+…y otros tratamientos según necesidad.
+`;
+  }
+
+  const matchedTags = new Set<string>();
+  for (const { tags, keywords } of TREATMENT_TOPIC_KEYWORDS) {
+    if (keywords.some((kw) => searchText.includes(kw))) {
+      tags.forEach((t) => matchedTags.add(t));
+    }
+  }
+
+  if (matchedTags.size === 0) {
+    if (/\b(presupuesto|cotizaci[oó]n|precio|costo|cu[aá]nto)\b/.test(searchText)) {
+      return `
+REFERENCIA PRECIOS: El paciente pide presupuesto. Menciona SOLO los servicios que él ya nombró en la conversación. Si no ha dicho cuáles, pregúntale cuáles necesita — NO listes todo el catálogo.
+`;
+    }
+    return "";
+  }
+
+  const filtered = allTreatments.filter((t) => {
+    const n = t.name.toLowerCase();
+    return [...matchedTags].some((tag) => n.includes(tag));
+  }).slice(0, 4);
+
+  if (!filtered.length) return "";
+
+  return `
+REFERENCIA INTERNA — precios base (usa SOLO lo que el paciente preguntó; no menciones otros tratamientos):
+${filtered.map((t) => `- ${t.name}: ${Number(t.price).toLocaleString()} pesos`).join("\n")}
+`;
+}
+
+function buildRelevantKnowledgeSection(
+  entries: { title: string; category: string; content: string }[],
+  searchText: string,
+): string {
+  if (!entries.length) return "";
+
+  if (wantsFullServiceCatalog(searchText)) {
+    const tarifario = entries.filter((e) => e.category === "tarifario").slice(0, 2);
+    const general = entries.filter((e) => e.category === "general").slice(0, 1);
+    const picked = [...general, ...tarifario];
+    if (!picked.length) return "";
+    return `\nARTÍCULOS DE AYUDA (resumir al paciente, no copiar listas):\n${picked.map((e) => `[${e.title}]\n${e.content}`).join("\n\n")}\n`;
+  }
+
+  const TOPIC_MAP: { keywords: string[]; titleHints: string[] }[] = [
+    { keywords: ["implante", "implan", "titanio"], titleHints: ["implante"] },
+    { keywords: ["profilaxis", "limpieza", "resina", "caries", "sellante", "detartraje", "urgencia"], titleHints: ["odontologia general", "general - precios"] },
+    { keywords: ["blanquea", "whitening"], titleHints: ["blanqueamiento"] },
+    { keywords: ["carilla", "sonrisa", "estetica", "estética"], titleHints: ["estetica", "estética"] },
+    { keywords: ["corona", "rehabilit", "protesis", "prótesis"], titleHints: ["rehabilitacion", "protesis", "prótesis"] },
+    { keywords: ["ortodoncia", "bracket", "frenillo"], titleHints: ["ortodoncia"] },
+    { keywords: ["endodoncia", "conducto"], titleHints: ["endodoncia"] },
+    { keywords: ["extraccion", "extracción", "cirugia", "cirugía"], titleHints: ["cirugia", "cirugía"] },
+    { keywords: ["encia", "encía", "periodont"], titleHints: ["periodoncia"] },
+    { keywords: ["pago", "financi", "cuota", "politica", "cancelar cita", "horario", "direccion", "dirección", "ubicacion", "ubicación"], titleHints: ["pagos", "politica", "general"] },
+  ];
+
+  const matched: typeof entries = [];
+  for (const { keywords, titleHints } of TOPIC_MAP) {
+    if (!keywords.some((kw) => searchText.includes(kw))) continue;
+    for (const entry of entries) {
+      const titleLower = entry.title.toLowerCase();
+      if (titleHints.some((hint) => titleLower.includes(hint)) && !matched.includes(entry)) {
+        matched.push(entry);
+      }
+    }
+  }
+
+  if (matched.length > 0) {
+    return `\nARTÍCULOS DE AYUDA (solo lo relevante a esta pregunta — resume, no copies listas largas):\n${matched.slice(0, 2).map((e) => `[${e.title}]\n${e.content}`).join("\n\n")}\n`;
+  }
+
+  if (/\b(presupuesto|cotizaci[oó]n)\b/.test(searchText)) {
+    return `\nARTÍCULOS DE AYUDA: Para presupuestos, usa DATOS DEL PANEL si hay presupuestos guardados; si no, pregunta qué servicios necesita — no des catálogo completo.\n`;
+  }
+
+  if (/\b(direccion|dirección|ubicacion|ubicación|donde están|dónde están|como llegar|cómo llegar)\b/.test(searchText)) {
+    const general = entries.find((e) => e.category === "general");
+    if (general) {
+      return `\nARTÍCULOS DE AYUDA:\n[${general.title}]\n${general.content}\n`;
+    }
+  }
+
+  return "";
+}
+
 export async function generateAIResponse(
   conversationId: number | null,
   patientMessage: string,
@@ -177,35 +302,6 @@ export async function generateAIResponse(
       }
     }
 
-    const treatmentsContext = allTreatments.length > 0 
-      ? `\nLISTADO DE TRATAMIENTOS Y PRECIOS BASE:\n${allTreatments.map(t => `- ${t.name}: ${Number(t.price).toLocaleString()} pesos`).join("\n")}\n`
-      : "";
-
-    // Knowledge Map
-    const KEYWORD_MAP: Record<string, string[]> = {
-      "Odontología General — Precios":       ["resina","obturac","caries","sellante","profilaxis","limpieza","higiene","urgencia","calculo","sarro","general","servicios","ofrece","disponibles"],
-      "Blanqueamiento Dental — Precios":     ["blanquea","whitening","aclar","diente amarillo","mancha"],
-      "Estética Dental — Carillas y Diseño de Sonrisa": ["carilla","diseño de sonrisa","estética","veneers","microdiseño","cerómero","disilicato","sonrisa"],
-      "Rehabilitación Oral — Coronas y Prótesis": ["corona","rehabilit","incrustac","nucleo","pilar","puente","recementar","provisional","platino","tradicional","zirconio"],
-      "Prótesis Dentales — Precios":         ["prótesis","protesis","acker","dentadura","dientes postizos","base","rebase","gancho"],
-      "Implantes Dentales — Precios Completos": ["implante","implan","titanio","prom","pilar","sobredentadura","hibrida","hueso","membrana","seno"],
-      "Cirugía Oral — Precios":              ["cirugia","cirugía","extraccion","extracción","exodoncia","muela del juicio","cordal","frenilect","biopsia","capuchon"],
-      "Periodoncia — Encías y Soporte Dental": ["encia","encía","periodont","curetaje","gingivect","reborde","injerto","sangra","piorrhea"],
-      "Endodoncia — Tratamiento de Conductos": ["endodoncia","conducto","nervio","pulpa","apice","apicectomia","reabsorcion","canal"],
-      "Ortodoncia — Planes y Precios":       ["ortodoncia","bracket","aligner","retenedor","mordida","dientes chuecos","torcidos","alinear","aparatos","brace"],
-      "Información sobre pagos y política de citas": ["pago","precio","cobro","cuota","financi","cancelar","politica","horario","direccion","ubicacion","costo","valor","cuanto vale","cuanto cuesta","cotizacion","presupuesto"],
-    };
-
-    const searchText = (patientMessage + " " + (opts.history ?? []).slice(-3).map(m => m.content).join(" ")).toLowerCase();
-    const filteredEntries = knowledgeEntries.filter(entry => {
-      if (entry.category === "general") return true;
-      const keywords = KEYWORD_MAP[entry.title] ?? [];
-      return keywords.some(kw => searchText.includes(kw));
-    });
-
-    const entriesToUse = filteredEntries.length > 0 ? filteredEntries : knowledgeEntries.filter(e => e.category === "general");
-    const knowledgeSection = `\nARTÍCULOS DE AYUDA:\n${entriesToUse.map(e => `[${e.title}]\n${e.content}`).join("\n\n")}\n`;
-
     let conversationHistory: { role: "user" | "assistant"; content: string }[] = [];
     if (opts.history) {
       conversationHistory = opts.history;
@@ -218,6 +314,10 @@ export async function generateAIResponse(
         .map(m => ({ role: m.sender === "patient" ? "user" : "assistant", content: m.content }));
     }
 
+    const searchText = combinedSearchText(patientMessage, conversationHistory);
+    const treatmentsContext = buildRelevantTreatmentsContext(allTreatments, searchText);
+    const knowledgeSection = buildRelevantKnowledgeSection(knowledgeEntries, searchText);
+
     const assistantName = p?.name ?? "Dante";
     const isFirstContact = conversationHistory.filter((m) => m.role === "assistant").length === 0;
 
@@ -229,7 +329,7 @@ PERFIL DE PERSONALIDAD (configuración de la clínica):
 - Idioma: ${p.language}
 - Longitud de respuestas preferida: ${p.maxResponseLength}
 ${p.dontRepeatGreeting ? "- No repitas la presentación completa en cada mensaje; solo la primera vez." : ""}
-${p.proactiveQuestions ? "- Haz preguntas proactivas con delicadeza, de a una o dos por mensaje." : ""}
+${p.proactiveQuestions ? "- Una sola pregunta de seguimiento por mensaje, breve y al punto." : ""}
 ${p.suggestAppointments ? "- Puedes INVITAR a agendar valoración cuando hable de tratamientos o precios, pero primero registra al paciente si no existe." : ""}
 ${p.escalateKeywords ? `- Si el paciente menciona palabras como: ${p.escalateKeywords}, indica que un asesor humano atenderá pronto.` : ""}
 ${p.extraInstructions ? `- Instrucciones adicionales: ${p.extraInstructions}` : ""}
@@ -279,32 +379,27 @@ PRIMERA VEZ CON ESTE CONTACTO:
       : "";
 
     const systemPrompt = `Eres ${assistantName}, el asistente oficial de ${clinicName} en Medellín.
-Eres una persona real, profesional, muy amable, empática, atento y resolutivo. Hablas con calidez humana, nunca de forma seca, fría ni robótica.
+Eres cercano, natural, servicial y profesional — como un recepcionista amable por WhatsApp, no un folleto publicitario.
 HOY: ${colombiaDay} ${colombiaDate}, ${colombiaTime}.
 ${personalitySection}
 ${clinicInfoSection}
 ${contactSection}
 ${firstContactSection}
 ${registrationSection}
-PAUTAS IMPORTANTES PARA TU COMPORTAMIENTO:
-- Tono gentil y cercano: usa frases amables ("con gusto", "será un placer", "cuéntame", "claro que sí"), valida lo que dice el paciente antes de responder (ej. "¡Buena pregunta!", "Con mucho gusto te cuento").
-- CIERRE CÁLIDO OBLIGATORIO: Después de aclarar cualquier duda (precios, tratamientos, ubicación, horarios, pagos, etc.), NUNCA termines solo con datos o cifras. Siempre cierra con una pregunta amable de seguimiento, por ejemplo:
-  · "¿Te gustaría saber algo más al respecto?"
-  · "¿Hay algo más en lo que pueda ayudarte hoy?"
-  · "¿Quieres que te ayude a agendar una valoración?"
-  · "¿Tienes alguna otra duda sobre este tratamiento?"
-  Si conoces el nombre del paciente, úsalo con naturalidad al cerrar (ej. "Jorge, ¿te queda alguna otra duda?").
-- Estructura ideal de cada respuesta: (1) validación breve → (2) información clara → (3) cierre cálido con oferta de más ayuda.
-- Conversación natural: después de la primera presentación, no repitas "soy ${assistantName}" en cada mensaje.
-- Respuestas completas y asesoría: Cuando te pregunten por tratamientos (como implantes, diseños, etc.), lee bien los ARTÍCULOS DE AYUDA. Da una explicación clara y amable, no solo una lista de precios.
-- Precios y variaciones: Si das un precio, aclara que es "precio base" y puede variar según el caso. Usa "pesos" (ej. "100.000 pesos"). ¡PROHIBIDO el símbolo "$"! Después del precio, ofrece más ayuda o invita a valoración.
-- Citas: Solo después de registrar al paciente, ofrece bloques horarios amplios (ej. "de 9:00 a.m. a 11:00 a.m."). No listes decenas de horas.
-- Cuando confirme fecha y hora concreta (sí, listo, me sirve, a las 10...), reserva con bookAppointment.
-- Cotizaciones: Si hay presupuestos en DATOS DEL PANEL, resume servicios y totales. Si pide el presupuesto formal/imagen, usa sendQuotation.
-- Abonos y recibos: Informa saldos; si pide recibo, usa sendPaymentReceipt con paymentId.
-- Consentimientos: Si hay pendiente, usa sendConsentLink.
-- REGLA CRÍTICA: Solo información del paciente identificado abajo. NUNCA inventes datos.
-- Devoluciones: Indica que un asesor humano lo revisará.
+REGLAS DE CONVERSACIÓN (PRIORIDAD MÁXIMA):
+- BREVEDAD: Máximo 2-4 oraciones cortas por mensaje. Es WhatsApp, no un email.
+- ENFOQUE: Responde SOLO lo que el paciente preguntó o confirmó en este turno. Nada más.
+- PROHIBIDO listar todos los servicios/tratamientos salvo que diga explícitamente "qué servicios tienen", "qué ofrecen" o similar.
+- PROHIBIDO repetir precios, listas o explicaciones que YA diste en mensajes anteriores — lee el historial con atención.
+- PROHIBIDO mencionar tratamientos que el paciente no pidió (ej. no hables de implantes si preguntó profilaxis).
+- CONFIRMACIONES: Si dice "sí", "ok", "hazlo", "?" o algo breve, interpreta según TU último mensaje y avanza el tema (confirmar cita, incluir tratamientos en la cita, dar total, etc.). NUNCA respondas con un catálogo de servicios.
+- Si hay CITA PRÓXIMA en DATOS DEL PANEL, úsala (fecha, hora, tratamiento) — no inventes ni ignores.
+- Tono cálido pero conciso: una validación breve + la respuesta + un cierre amable de UNA línea (ej. "¿Te ayudo con algo más?").
+- Precios: Solo los servicios que pidió. Di "precio base" y que puede variar. Usa "pesos", nunca "$".
+- Presupuesto: Si pide presupuesto de servicios concretos, da solo esos con total estimado. Si hay presupuesto en DATOS DEL PANEL, úsalo. Si no especificó servicios, pregúntale cuáles necesita.
+- Citas: Bloques horarios amplios (máx. 2 por día). Cuando confirme hora concreta, usa bookAppointment.
+- Cotizaciones formales: sendQuotation. Recibos: sendPaymentReceipt. Consentimientos: sendConsentLink.
+- Solo datos del paciente identificado abajo. NUNCA inventes información.
 ${slotsSection}
 ACCESO AL PANEL: Ficha completa del paciente identificado.
 - Registra pacientes nuevos con registerPatient cuando tengas nombre real y motivo de consulta.
@@ -345,7 +440,8 @@ FORMATO JSON:
       model: "llama-3.3-70b-versatile",
       messages,
       response_format: { type: "json_object" as const },
-      temperature: 0.72,
+      temperature: 0.55,
+      max_tokens: 380,
     });
 
     const rawContent = completion.choices[0]?.message?.content?.trim() ?? "{}";
