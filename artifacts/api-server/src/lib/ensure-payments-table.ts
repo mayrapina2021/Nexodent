@@ -20,8 +20,8 @@ export async function ensurePaymentsTable(): Promise<void> {
     )
   `);
 
-  await db.execute(sql`ALTER TABLE payments ADD COLUMN IF NOT EXISTS patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE`);
-  await db.execute(sql`ALTER TABLE payments ADD COLUMN IF NOT EXISTS quotation_id INTEGER REFERENCES quotations(id) ON DELETE SET NULL`);
+  await db.execute(sql`ALTER TABLE payments ADD COLUMN IF NOT EXISTS patient_id INTEGER`);
+  await db.execute(sql`ALTER TABLE payments ADD COLUMN IF NOT EXISTS quotation_id INTEGER`);
   await db.execute(sql`ALTER TABLE payments ADD COLUMN IF NOT EXISTS treatment_name TEXT`);
   await db.execute(sql`ALTER TABLE payments ADD COLUMN IF NOT EXISTS expected_total INTEGER`);
   await db.execute(sql`ALTER TABLE payments ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'efectivo'`);

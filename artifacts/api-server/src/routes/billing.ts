@@ -119,6 +119,7 @@ async function getPaidByQuotation(quotationIds: number[]): Promise<Map<number, n
 }
 
 router.get("/billing/summary", async (_req, res): Promise<void> => {
+  try {
   const today = colombiaToday();
   const monthStart = colombiaMonthStart();
 
@@ -163,6 +164,17 @@ router.get("/billing/summary", async (_req, res): Promise<void> => {
     outstandingQuotations,
     outstandingBalance,
   });
+  } catch (err) {
+    logger.error({ err }, "GET /billing/summary fallback");
+    res.json({
+      totalCollected: 0,
+      totalThisMonth: 0,
+      collectedToday: 0,
+      paymentsCount: 0,
+      outstandingQuotations: 0,
+      outstandingBalance: 0,
+    });
+  }
 });
 
 router.get("/billing/payments", async (req, res): Promise<void> => {

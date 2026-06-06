@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, quotationsTable, evolutionNotesTable, patientsTable, settingsTable, odontogramsTable, consentFormsTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import {
   CreateEvolutionNoteBody,
   CreateQuotationBody,
@@ -84,24 +84,34 @@ router.post("/clinical/consent", async (req, res): Promise<void> => {
 
 // Presupuestos
 router.get("/clinical/quotations", async (req, res): Promise<void> => {
-  const patientId = req.query.patientId ? parseInt(String(req.query.patientId), 10) : undefined;
-  const conditions = patientId ? eq(quotationsTable.patientId, patientId) : undefined;
-  
-  const rows = await db.select({
-    id: quotationsTable.id,
-    patientId: quotationsTable.patientId,
-    patientName: patientsTable.name,
-    items: quotationsTable.items,
-    total: quotationsTable.total,
-    status: quotationsTable.status,
-    observations: quotationsTable.observations,
-    createdAt: quotationsTable.createdAt,
-  }).from(quotationsTable)
-    .innerJoin(patientsTable, eq(quotationsTable.patientId, patientsTable.id))
-    .where(conditions)
-    .orderBy(desc(quotationsTable.createdAt));
-  
-  res.json(rows);
+  try {
+    const patientId = req.query.patientId ? parseInt(String(req.query.patientId), 10) : undefined;
+    const conditions = patientId ? eq(quotationsTable.patientId, patientId) : undefined;
+
+    const rows = await db.select({
+      id: quotationsTable.id,
+      patientId: quotationsTable.patientId,
+      patientName: patientsTable.name,
+      items: quotationsTable.items,
+      total: quotationsTable.total,
+      status: quotationsTable.status,
+      observations: quotationsTable.observations,
+      createdAt: quotationsTable.createdAt,
+    }).from(quotationsTable)
+      .innerJoin(patientsTable, eq(quotationsTable.patientId, patientsTable.id))
+      .where(conditions)
+      .orderBy(desc(quotationsTable.createdAt));
+
+    res.json(rows);
+  } catch (err) {
+    logger.error({ err }, "GET /clinical/quotations fallback");
+    const patientId = req.query.patientId ? parseInt(String(req.query.patientId), 10) : undefined;
+    const base = sql`SELECT q.id, q.patient_id as "patientId", p.name as "patientName", q.items, q.total, q.status, q.created_at as "createdAt" FROM quotations q INNER JOIN patients p ON q.patient_id = p.id`;
+    const result = patientId
+      ? await db.execute(sql`${base} WHERE q.patient_id = ${patientId} ORDER BY q.created_at DESC`)
+      : await db.execute(sql`${base} ORDER BY q.created_at DESC`);
+    res.json((result.rows as Record<string, unknown>[]).map((r) => ({ ...r, observations: null })));
+  }
 });
 
 router.post("/clinical/quotations", async (req, res): Promise<void> => {

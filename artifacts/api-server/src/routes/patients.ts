@@ -43,11 +43,10 @@ router.get("/patients", async (req, res): Promise<void> => {
     if (typeof query.data.maxAge === "number") conditions.push(lte(patientsTable.age as any, query.data.maxAge));
   }
 
-  const patients = await db
-    .select()
-    .from(patientsTable)
-    .where(conditions.length ? and(...conditions) : undefined)
-    .orderBy(sql`${patientsTable.createdAt} desc`);
+  // Raw SQL tolera columnas nuevas aún no migradas en producción
+  const patients = conditions.length
+    ? await db.select().from(patientsTable).where(and(...conditions)).orderBy(sql`${patientsTable.createdAt} desc`)
+    : ((await db.execute(sql`SELECT * FROM patients ORDER BY created_at DESC`)).rows as typeof patientsTable.$inferSelect[]);
 
   // Próxima cita de cada paciente (solo fechas futuras o de hoy)
   const colombiaToday = new Intl.DateTimeFormat("en-CA", {
