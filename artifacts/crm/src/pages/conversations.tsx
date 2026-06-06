@@ -292,8 +292,11 @@ export default function Conversations() {
       )}
       {waStatus?.connected && (
         <div className="mb-3 flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/5 px-4 py-2 text-xs text-muted-foreground">
-          <Wifi className="h-3.5 w-3.5 text-green-500" />
-          WhatsApp conectado {waStatus.phone ? `(${waStatus.phone})` : ""} — los mensajes entrantes se procesan en tiempo real.
+          <Wifi className="h-3.5 w-3.5 text-green-500 shrink-0" />
+          <span>
+            WhatsApp conectado {waStatus.phone ? `(${waStatus.phone})` : ""}.
+            Si no ves mensajes nuevos, cierra la pestaña de WhatsApp Web en el navegador y envía un mensaje de nuevo.
+          </span>
         </div>
       )}
       <div className="h-[calc(100vh-8rem)] flex gap-0 rounded-xl overflow-hidden border border-border/50">

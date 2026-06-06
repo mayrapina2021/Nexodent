@@ -28,13 +28,13 @@ export interface WAState {
   botEnabled: boolean;
 }
 
-const APPEND_MAX_AGE_SEC = 300;
+const APPEND_MAX_AGE_SEC = 3600;
 
 function isRecentWhatsAppMessage(msg: proto.IWebMessageInfo): boolean {
   const ts = Number(msg.messageTimestamp ?? 0);
   if (!ts) return true;
   const ageSec = Date.now() / 1000 - ts;
-  return ageSec >= 0 && ageSec <= APPEND_MAX_AGE_SEC;
+  return ageSec >= -120 && ageSec <= APPEND_MAX_AGE_SEC;
 }
 
 const _messageStore = new Map<string, proto.IMessage>();
@@ -55,14 +55,16 @@ function cacheMessage(msg: proto.IWebMessageInfo): void {
 }
 const _processedMsgIds = new Set<string>();
 
-function isAlreadyProcessed(msgId: string): boolean {
-  if (_processedMsgIds.has(msgId)) return true;
+function markProcessed(msgId: string): void {
   _processedMsgIds.add(msgId);
-  if (_processedMsgIds.size > 500) {
+  if (_processedMsgIds.size > 2000) {
     const first = _processedMsgIds.values().next().value;
     if (first) _processedMsgIds.delete(first);
   }
-  return false;
+}
+
+function wasProcessedInMemory(msgId: string): boolean {
+  return _processedMsgIds.has(msgId);
 }
 
 let sock: WASocket | null = null;
@@ -262,21 +264,25 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo, source: "notify
   const fromMe = msg.key.fromMe === true;
   const msgId = msg.key.id ?? "";
 
-  if (msgId && isAlreadyProcessed(msgId)) {
-    logger.info({ msgId, source }, "Mensaje ya procesado, ignorando duplicado");
+  if (msgId && wasProcessedInMemory(msgId)) {
     return;
   }
 
   if (msgId) {
     const existing = await findMessageByWhatsappId(msgId);
     if (existing) {
-      logger.info({ msgId, source }, "Mensaje WhatsApp ya en base de datos");
+      markProcessed(msgId);
       return;
     }
   }
 
+  if (!msg.message) {
+    logger.info({ msgId, source, jid }, "Mensaje sin contenido aún (esperando update)");
+    return;
+  }
+
   if (source === "append" && !isRecentWhatsAppMessage(msg)) {
-    logger.info({ msgId, jid: msg.key?.remoteJid }, "Mensaje append antiguo ignorado (historial)");
+    logger.info({ msgId, jid: msg.key?.remoteJid }, "Mensaje append muy antiguo ignorado");
     return;
   }
 
@@ -295,7 +301,10 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo, source: "notify
   const shouldTranscribeAudio = !fromMe && globalBotEnabled && (!existingConv || existingConv.aiMode);
 
   const parsed = await parseWhatsAppMessage(msg, sock, { transcribeAudio: shouldTranscribeAudio });
-  if (!parsed?.text.trim() && !parsed?.mediaData) return;
+  if (!parsed?.text.trim() && !parsed?.mediaData) {
+    logger.warn({ msgId, source, jid, phone: formattedPhone }, "Mensaje sin texto ni media parseable");
+    return;
+  }
 
   const text = parsed.text.trim() || (parsed.mediaData ? parsed.text : "");
   if (!text && !parsed.mediaData) return;
@@ -334,6 +343,10 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo, source: "notify
       whatsappMsgId: msgId || null,
       read: fromMe,
     });
+
+    if (msgId) markProcessed(msgId);
+
+    logger.info({ msgId, source, conversationId: conv.id, phone: formattedPhone, text: preview }, "Mensaje guardado en CRM");
 
     await db.update(conversationsTable).set({
       lastMessage: preview,
@@ -510,16 +523,43 @@ export async function startWhatsApp(): Promise<void> {
         botEnabled: prevBotEnabled,
       };
       logger.info({ phone: _state.phone }, "WhatsApp conectado exitosamente");
+      setTimeout(() => {
+        logger.info("Sincronizando mensajes pendientes tras conexión...");
+      }, 2000);
     }
   });
 
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
     if (type !== "notify" && type !== "append") return;
+    logger.info({ type, count: messages.length }, "messages.upsert recibido");
     for (const msg of messages) {
       try {
         await handleIncomingMessage(msg, type);
       } catch (err) {
         logger.error({ err, type, msgId: msg.key?.id }, "Error en messages.upsert");
+      }
+    }
+  });
+
+  sock.ev.on("messages.update", async (updates) => {
+    for (const { key, update } of updates) {
+      if (!key?.id || !update.message) continue;
+      if (wasProcessedInMemory(key.id)) continue;
+      const existing = await findMessageByWhatsappId(key.id);
+      if (existing) {
+        markProcessed(key.id);
+        continue;
+      }
+      try {
+        const fullMsg: proto.IWebMessageInfo = {
+          key,
+          message: update.message,
+          messageTimestamp: update.messageTimestamp,
+          pushName: update.pushName,
+        };
+        await handleIncomingMessage(fullMsg, "notify");
+      } catch (err) {
+        logger.error({ err, msgId: key.id }, "Error en messages.update");
       }
     }
   });
