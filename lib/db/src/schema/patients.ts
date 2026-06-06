@@ -5,6 +5,7 @@ import { z } from "zod/v4";
 export const patientsTable = pgTable("patients", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
+  cedula: text("cedula"),
   phone: text("phone").notNull(),
   email: text("email"),
   age: integer("age"),
@@ -16,6 +17,9 @@ export const patientsTable = pgTable("patients", {
   treatmentPrice: integer("treatment_price"),
   diagnosis: text("diagnosis"),
   odontogram: jsonb("odontogram"), // JSON structure for teeth states
+  neighborhood: text("neighborhood"),
+  referralSource: text("referral_source"),
+  city: text("city"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

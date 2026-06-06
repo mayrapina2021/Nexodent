@@ -16,6 +16,7 @@ import Quotations from "@/pages/quotations";
 import ClinicalHistory from "@/pages/clinical-history";
 import Inventory from "@/pages/inventory";
 import Treatments from "@/pages/treatments";
+import Billing from "@/pages/billing";
 
 
 import { setBaseUrl, setAuthTokenGetter } from "@workspace/api-client-react";
@@ -52,6 +53,7 @@ function Router() {
       <Route path="/settings" component={Settings} />
       <Route path="/ai-training" component={AITraining} />
       <Route path="/quotations" component={Quotations} />
+      <Route path="/billing" component={Billing} />
       <Route path="/clinical/:patientId" component={ClinicalHistory} />
       <Route path="/inventory" component={Inventory} />
       <Route path="/treatments" component={Treatments} />

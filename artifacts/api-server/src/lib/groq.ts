@@ -1,11 +1,8 @@
-import Groq from "groq-sdk";
-import { db, settingsTable, conversationsTable, messagesTable, patientsTable, aiKnowledgeTable, aiPersonalityTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import Groq, { toFile } from "groq-sdk";
+import { db, settingsTable, conversationsTable, messagesTable, patientsTable, aiKnowledgeTable, aiPersonalityTable, quotationsTable, appointmentsTable, treatmentsTable } from "@workspace/db";
+import { eq, desc, asc, or, ilike, and, gte } from "drizzle-orm";
 import { logger } from "./logger";
-import fs from "fs";
-import os from "os";
-import path from "path";
-import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
+import { DEFAULT_CLINIC_ADDRESS } from "./clinic-defaults";
 
 let _groq: Groq | null = null;
 function getGroq(): Groq {
@@ -18,6 +15,8 @@ function getGroq(): Groq {
 export interface AIActions {
   registerPatient?: { name: string; phone?: string | null; treatment: string } | null;
   bookAppointment?: { date: string; startTime: string; treatment: string; notes?: string } | null;
+  cancelAppointment?: { appointmentId: number } | null;
+  rescheduleAppointment?: { appointmentId: number; date: string; startTime: string } | null;
   updatePhone?: { phone: string } | null;
   updateStatus?: { status: "new" | "interested" | "scheduled" | "attended" | "in_treatment" | "completed" } | null;
 }
@@ -56,6 +55,7 @@ function getColombiaNow(): { dateStr: string; timeStr: string; dayName: string }
 }
 
 function to12h(time24: string): string {
+  if (!time24) return "";
   const [hStr, mStr] = time24.split(":");
   let h = parseInt(hStr, 10);
   const m = mStr ?? "00";
@@ -65,77 +65,26 @@ function to12h(time24: string): string {
   return `${h}:${m} ${ampm}`;
 }
 
-export async function transcribeAudio(filePath: string): Promise<string> {
-  try {
-    const groq = getGroq();
-    const transcription = await groq.audio.transcriptions.create({
-      file: fs.createReadStream(filePath),
-      model: "whisper-large-v3",
-      language: "es",
-    });
-    return transcription.text;
-  } catch (err) {
-    logger.error({ err }, "Error transcribiendo audio con Groq Whisper");
-    return "";
+function formatAvailableSlotsForPrompt(
+  slots?: { label: string; slots: string[] }[],
+): string {
+  if (!slots?.length) return "";
+  const withAvailability = slots.filter((d) => d.slots.length > 0);
+  if (!withAvailability.length) {
+    return `
+HORARIOS DISPONIBLES: No hay cupos libres en los próximos 3 días laborables. Ofrece contactar la clínica o proponer otro día; no inventes horarios.
+`;
   }
-}
-
-/**
- * Genera un audio MP3 con voz masculina neural usando ms-edge-tts.
- * Voz: es-CO-GonzaloNeural (Colombia, masculino, muy natural)
- * Retorna la ruta del archivo temporal generado, o null si falla.
- */
-export async function generateVoiceFile(text: string): Promise<string | null> {
-  try {
-    const cleanText = text.slice(0, 500).replace(/[*_~`#]/g, "");
-    const outFile = path.join(os.tmpdir(), `dante_voice_${Date.now()}.mp3`);
-    
-    const tts = new MsEdgeTTS();
-    await tts.setMetadata("es-CO-GonzaloNeural", OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
-    
-    const buffer = await new Promise<Buffer>((resolve, reject) => {
-      tts.toStream(cleanText)
-        .on("data", (data) => {
-          // Stream data handling if needed, but toStream returns a readable stream
-        });
-      
-      // Better: use the internal buffer or a promise wrapper if available
-      // The ms-edge-tts library usually has a simpler way or we can pipe it
-      const chunks: any[] = [];
-      const streams = tts.toStream(cleanText);
-      streams.audioStream.on("data", (chunk) => chunks.push(chunk));
-      streams.audioStream.on("end", () => resolve(Buffer.concat(chunks)));
-      streams.audioStream.on("error", reject);
-    });
-
-    if (buffer && buffer.length > 0) {
-      fs.writeFileSync(outFile, buffer);
-      return outFile;
-    }
-    return null;
-  } catch (err) {
-    logger.error({ err }, "Error generando voz con ms-edge-tts, intentando fallback...");
-    try {
-      const cleanText = text.slice(0, 300).replace(/[*_~`#]/g, "");
-      const outFile = path.join(os.tmpdir(), `dante_voice_fallback_${Date.now()}.mp3`);
-      const tts = new MsEdgeTTS();
-      await tts.setMetadata("es-MX-JorgeNeural", OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
-      
-      const chunks: any[] = [];
-      const streams = tts.toStream(cleanText);
-      await new Promise<void>((resolve, reject) => {
-        streams.audioStream.on("data", (chunk) => chunks.push(chunk));
-        streams.audioStream.on("end", () => {
-          fs.writeFileSync(outFile, Buffer.concat(chunks));
-          resolve();
-        });
-        streams.audioStream.on("error", reject);
-      });
-      return outFile;
-    } catch (_) {
-      return null;
-    }
-  }
+  const lines = withAvailability.map(
+    (d) => `- ${d.label}: ${d.slots.map((t) => to12h(t)).join(", ")} (reservar con startTime 24h: ${d.slots.join(", ")})`,
+  );
+  return `
+HORARIOS DISPONIBLES (para agendar cita nueva o reagendar; NO ejecutar hasta que el paciente confirme):
+- Puedes ofrecer estos cupos cuando el paciente quiera agendar o cambiar una cita.
+- Usa la fecha YYYY-MM-DD y startTime 24h HH:MM solo si el paciente CONFIRMA explícitamente.
+- No inventes horarios fuera de esta lista.
+${lines.join("\n")}
+`;
 }
 
 export async function generateAIResponse(
@@ -144,41 +93,89 @@ export async function generateAIResponse(
   opts: AIOptions = {}
 ): Promise<AIResponse> {
   try {
-    const [settings, personality, knowledgeEntries] = await Promise.all([
+    const [settings, personality, knowledgeEntries, allTreatments] = await Promise.all([
       db.select().from(settingsTable).limit(1),
       db.select().from(aiPersonalityTable).limit(1),
       db.select().from(aiKnowledgeTable).where(eq(aiKnowledgeTable.active, true)).orderBy(aiKnowledgeTable.category),
+      db.select().from(treatmentsTable).where(eq(treatmentsTable.active, true)),
     ]);
 
     const cfg = settings[0];
     const p = personality[0];
     const clinicName = cfg?.clinicName ?? "Nexodent";
+    const clinicAddress = (cfg?.clinicAddress?.trim() || DEFAULT_CLINIC_ADDRESS);
+    const clinicPhone = cfg?.clinicPhone?.trim() ?? "";
     const { dateStr: colombiaDate, timeStr: colombiaTime, dayName: colombiaDay } = getColombiaNow();
 
     let patientContext = "";
-    let patientAlreadyRegistered = false;
-    let patientHasPhone = false;
+    let dataContext = "";
+
     if (conversationId && !opts.testMode) {
       const [conv] = await db.select().from(conversationsTable).where(eq(conversationsTable.id, conversationId));
-      if (conv?.patientId) {
-        patientAlreadyRegistered = true;
-        const [patient] = await db.select().from(patientsTable).where(eq(patientsTable.id, conv.patientId));
-        if (patient) {
-          const firstName = patient.name.split(" ")[0];
-          patientHasPhone = !!(patient.phone && !patient.phone.startsWith("+57") && patient.phone.length <= 12);
-          patientContext = `\nPACIENTE REGISTRADO:\n- Nombre: ${patient.name} (llámalo/a "${firstName}")\n- Teléfono guardado: ${patient.phone}${patientHasPhone ? " (ya tiene celular propio)" : " (solo tiene número de WhatsApp — aún necesitamos su celular de contacto)"}\n- Tratamiento: ${patient.treatment ?? "sin especificar"}\n- Estado: ${patient.status}`;
-        }
-      } else if (conv?.patientName) {
-        patientContext = `\nNombre del contacto: ${conv.patientName} (aún no registrado como paciente).`;
+      let patientId = conv?.patientId;
+
+      const potentialPhone = patientMessage.replace(/\D/g, "");
+      if (!patientId && potentialPhone.length >= 7) {
+        const [pByPhone] = await db.select().from(patientsTable).where(or(
+          ilike(patientsTable.phone, `%${potentialPhone}%`),
+          eq(patientsTable.phone, potentialPhone)
+        )).limit(1);
+        if (pByPhone) patientId = pByPhone.id;
       }
-    } else if (opts.patientName) {
-      patientContext = `\nEstás hablando con: ${opts.patientName}.`;
+
+      if (patientId) {
+        const [patient, quotes, appointments] = await Promise.all([
+          db.select().from(patientsTable).where(eq(patientsTable.id, patientId)).limit(1),
+          db.select().from(quotationsTable).where(eq(quotationsTable.patientId, patientId)).orderBy(desc(quotationsTable.createdAt)).limit(3),
+          db.select().from(appointmentsTable).where(eq(appointmentsTable.patientId, patientId)).orderBy(desc(appointmentsTable.date)).limit(5),
+        ]);
+
+        if (patient[0]) {
+          const pData = patient[0];
+          const firstName = pData.name.split(" ")[0];
+          patientContext = `\nPACIENTE ENCONTRADO:\n- Nombre: ${pData.name} (llámalo/a "${firstName}")\n- Teléfono: ${pData.phone}\n- Estado: ${pData.status}`;
+          
+          dataContext += "\n━━━ DATOS DEL PANEL ━━━";
+
+          const upcomingAppts = appointments
+            .filter((a) => (a.status === "scheduled" || a.status === "confirmed") && a.date >= colombiaDate)
+            .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
+          
+          if (quotes.length > 0) {
+            dataContext += "\nCOTIZACIONES:";
+            for (const q of quotes) {
+              const items = (q.items as any[]).map(it => `- ${it.service}: ${Number(it.price).toLocaleString()} pesos`).join("\n");
+              dataContext += `\n#${q.id} (${q.status}):\n${items}\nTOTAL: ${Number(q.total).toLocaleString()} pesos\n`;
+            }
+          }
+
+          if (appointments.length > 0) {
+            dataContext += "\nCITAS DEL PACIENTE (usa appointmentId para cancelar o reagendar):";
+            if (upcomingAppts.length > 0) {
+              dataContext += "\nPRÓXIMAS (activas):";
+              for (const a of upcomingAppts) {
+                dataContext += `\n- appointmentId ${a.id} | ${a.date} ${to12h(a.startTime)} | ${a.treatment} (${a.status})`;
+              }
+            }
+            const pastOrOther = appointments.filter((a) => !upcomingAppts.some((u) => u.id === a.id));
+            if (pastOrOther.length > 0) {
+              dataContext += "\nHISTORIAL RECIENTE:";
+              for (const a of pastOrOther.slice(0, 3)) {
+                dataContext += `\n- appointmentId ${a.id} | ${a.date} ${to12h(a.startTime)} | ${a.treatment} (${a.status})`;
+              }
+            }
+          }
+        }
+      }
     }
 
-    // Smart knowledge filtering: only load entries relevant to this conversation
-    // to avoid enormous prompts that burn tokens on the free plan
+    const treatmentsContext = allTreatments.length > 0 
+      ? `\nLISTADO DE TRATAMIENTOS Y PRECIOS BASE:\n${allTreatments.map(t => `- ${t.name}: ${Number(t.price).toLocaleString()} pesos`).join("\n")}\n`
+      : "";
+
+    // Knowledge Map
     const KEYWORD_MAP: Record<string, string[]> = {
-      "Odontología General — Precios":       ["resina","obturac","caries","sellante","profilaxis","limpieza","higiene","urgencia","calculo","sarro","general"],
+      "Odontología General — Precios":       ["resina","obturac","caries","sellante","profilaxis","limpieza","higiene","urgencia","calculo","sarro","general","servicios","ofrece","disponibles"],
       "Blanqueamiento Dental — Precios":     ["blanquea","whitening","aclar","diente amarillo","mancha"],
       "Estética Dental — Carillas y Diseño de Sonrisa": ["carilla","diseño de sonrisa","estética","veneers","microdiseño","cerómero","disilicato","sonrisa"],
       "Rehabilitación Oral — Coronas y Prótesis": ["corona","rehabilit","incrustac","nucleo","pilar","puente","recementar","provisional","platino","tradicional","zirconio"],
@@ -187,245 +184,167 @@ export async function generateAIResponse(
       "Cirugía Oral — Precios":              ["cirugia","cirugía","extraccion","extracción","exodoncia","muela del juicio","cordal","frenilect","biopsia","capuchon"],
       "Periodoncia — Encías y Soporte Dental": ["encia","encía","periodont","curetaje","gingivect","reborde","injerto","sangra","piorrhea"],
       "Endodoncia — Tratamiento de Conductos": ["endodoncia","conducto","nervio","pulpa","apice","apicectomia","reabsorcion","canal"],
-      "Ortodoncia — Planes y Precios":       ["ortodoncia","bracket","aligner","retenedor","mordida","dientes chuecos","dientes torcidos","alinear","aparatos","brace"],
-      "Información sobre pagos y política de citas": ["pago","precio","cobro","cuota","financi","cancelar","politica","horario","direccion","ubicacion","costo","valor","cuanto vale","cuánto vale","cuanto cuesta","cuánto cuesta"],
+      "Ortodoncia — Planes y Precios":       ["ortodoncia","bracket","aligner","retenedor","mordida","dientes chuecos","torcidos","alinear","aparatos","brace"],
+      "Información sobre pagos y política de citas": ["pago","precio","cobro","cuota","financi","cancelar","politica","horario","direccion","ubicacion","costo","valor","cuanto vale","cuanto cuesta","cotizacion","presupuesto"],
     };
 
-    const searchText = [
-      patientMessage,
-      ...(opts.history ?? []).slice(-4).map(m => m.content),
-    ].join(" ").toLowerCase();
-
-    // Always include "general" entries; include tarifario entries only if relevant
+    const searchText = (patientMessage + " " + (opts.history ?? []).slice(-3).map(m => m.content).join(" ")).toLowerCase();
     const filteredEntries = knowledgeEntries.filter(entry => {
       if (entry.category === "general") return true;
       const keywords = KEYWORD_MAP[entry.title] ?? [];
       return keywords.some(kw => searchText.includes(kw));
     });
 
-    // If nothing matched, include the general/payments entry as fallback context
     const entriesToUse = filteredEntries.length > 0 ? filteredEntries : knowledgeEntries.filter(e => e.category === "general");
-
-    let knowledgeSection = "";
-    if (entriesToUse.length > 0) {
-      const items = entriesToUse.map(e => `[${e.title}]\n${e.content}`).join("\n\n");
-      knowledgeSection = `\n━━━ INFORMACIÓN DEL CONSULTORIO ━━━\n${items}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
-    }
+    const knowledgeSection = `\nARTÍCULOS DE AYUDA:\n${entriesToUse.map(e => `[${e.title}]\n${e.content}`).join("\n\n")}\n`;
 
     let conversationHistory: { role: "user" | "assistant"; content: string }[] = [];
-    let isNewSession = false;
-
     if (opts.history) {
       conversationHistory = opts.history;
-      isNewSession = conversationHistory.filter(m => m.role === "assistant").length === 0;
     } else if (conversationId) {
       const pastMessages = await db.select().from(messagesTable)
         .where(eq(messagesTable.conversationId, conversationId))
-        .orderBy(messagesTable.sentAt)
-        .limit(20);
-
-      const SESSION_GAP_MS = 4 * 60 * 60 * 1000;
-      const lastMsg = pastMessages[pastMessages.length - 1];
-      const timeSinceLast = lastMsg?.sentAt ? Date.now() - new Date(lastMsg.sentAt).getTime() : Infinity;
-      isNewSession = pastMessages.length === 0 || timeSinceLast > SESSION_GAP_MS;
-
-      conversationHistory = pastMessages
-        .filter(m => m.sender === "patient" || m.sender === "ai" || m.sender === "agent")
-        .map(m => ({
-          role: m.sender === "patient" ? "user" as const : "assistant" as const,
-          content: m.content,
-        }));
+        .orderBy(asc(messagesTable.id))
+        .limit(15);
+      conversationHistory = pastMessages.filter(m => m.sender === "patient" || m.sender === "ai")
+        .map(m => ({ role: m.sender === "patient" ? "user" : "assistant", content: m.content }));
     }
 
-    const isFirstMessage = isNewSession;
-    const dontRepeatGreeting = p?.dontRepeatGreeting ?? true;
+    const assistantName = p?.name ?? "Dante";
 
-    const lengthGuide: Record<string, string> = {
-      corta: "Máximo 2 oraciones por respuesta. Directa y natural, como chat de WhatsApp real.",
-      media: "2-3 oraciones. Sin rodeos.",
-      larga: "Responde con detalle cuando sea necesario.",
-    };
-    const lengthInstruction = lengthGuide[p?.maxResponseLength ?? "corta"] ?? lengthGuide.corta;
+    const personalitySection = p ? `
+PERFIL DE PERSONALIDAD (configuración de la clínica):
+- Rol: ${p.role}
+- Objetivo principal: ${p.mainGoal}
+- Tono: ${p.tone}
+- Idioma: ${p.language}
+- Longitud de respuestas preferida: ${p.maxResponseLength}
+${p.dontRepeatGreeting ? "- No repitas saludos de presentación en cada mensaje; fluye de forma natural." : ""}
+${p.proactiveQuestions ? "- Haz preguntas proactivas para entender la necesidad del paciente." : ""}
+${p.suggestAppointments ? "- Puedes INVITAR a agendar valoración cuando hables de tratamientos o precios, pero NO reserves cita hasta que el paciente diga que sí y confirme fecha/hora." : ""}
+${p.escalateKeywords ? `- Si el paciente menciona palabras como: ${p.escalateKeywords}, indica que un asesor humano atenderá pronto.` : ""}
+${p.extraInstructions ? `- Instrucciones adicionales: ${p.extraInstructions}` : ""}
+` : "";
 
-    const escalateKeywords = (p?.escalateKeywords ?? "emergencia,urgencia,dolor fuerte,accidente,hemorragia")
-      .split(",").map(k => k.trim()).filter(Boolean);
-    const needsEscalate = escalateKeywords.some(kw =>
-      patientMessage.toLowerCase().includes(kw.toLowerCase())
-    );
+    const slotsSection = formatAvailableSlotsForPrompt(opts.availableSlots);
 
-    let availableSlotsSection = "";
-    if (opts.availableSlots && opts.availableSlots.length > 0) {
-      const hasSlots = opts.availableSlots.some(d => d.slots.length > 0);
-      if (hasSlots) {
-        availableSlotsSection = `\n\nHORARIOS DISPONIBLES (usa SOLO estos):`;
-        for (const { label, slots } of opts.availableSlots) {
-          if (slots.length > 0) {
-            availableSlotsSection += `\n• ${label}: ${slots.slice(0, 6).map(s => to12h(s)).join(" / ")}`;
-          }
-        }
-        availableSlotsSection += `\n⚠️ Son las ${colombiaTime}. No ofrezcas horas pasadas.`;
-      } else {
-        availableSlotsSection = `\n\nNo hay cupos disponibles para hoy/mañana. Sugiera otra fecha.`;
-      }
-    }
+    const clinicInfoSection = `
+DATOS OFICIALES DEL CONSULTORIO (obligatorio cuando pregunten ubicación):
+- Nombre: ${clinicName}
+- Dirección exacta: ${clinicAddress}
+${clinicPhone ? `- Teléfono: ${clinicPhone}` : ""}
+- Horario: Lunes a Sábado, 8:00 a.m. a 6:00 p.m.
+REGLA DE UBICACIÓN: Si preguntan dónde están, dirección, dirección exacta, cómo llegar o ubicación, responde con la dirección completa de arriba. NUNCA digas que no puedes dar la dirección. NUNCA inventes otra calle o número distinto.
+`;
 
-    const assistantName = p?.name ?? "Andrea";
+    const systemPrompt = `Eres ${assistantName}, la asistente oficial de ${clinicName} en Medellín.
+Eres una persona real, profesional, muy amable y resolutiva. Tu objetivo es ayudar a los pacientes.
+HOY: ${colombiaDay} ${colombiaDate}, ${colombiaTime}.
+${personalitySection}
+${clinicInfoSection}
+PAUTAS IMPORTANTES PARA TU COMPORTAMIENTO:
+- Conversación natural: No tienes que presentarte ("Soy ${assistantName}") en cada mensaje. Si el paciente ya te conoce y te saluda, fluye con la conversación de forma natural y cálida, sin usar frases repetitivas.
+- Respuestas completas y asesoría: Cuando te pregunten por tratamientos (como implantes, diseños, etc.), lee bien los ARTÍCULOS DE AYUDA. Da una explicación detallada y clara de las opciones.
+- Precios y variaciones: Si das un precio, aclara siempre que es un "precio base" y que puede variar dependiendo del caso clínico. Usa siempre la palabra "pesos" (ej. "Cuesta 100.000 pesos"). ¡PROHIBIDO usar el símbolo "$"!
+- Citas de valoración: Puedes invitar a agendar valoración cuando pidan precios o info. Ofrece horarios disponibles y, cuando el paciente confirme fecha y hora (sí, listo, me sirve, agéndame...), reserva con bookAppointment.
+- Cotizaciones: Si en DATOS DEL PANEL hay cotizaciones, puedes resumir servicios y totales en pesos cuando el paciente lo pida. Si necesitan el PDF/imagen formal, indica que un asesor puede enviarlo desde el panel.
+- Pagos: No tienes acceso a los pagos ni abonos. Si te piden un recibo, dile con amabilidad que un asesor humano lo revisará pronto.
+${slotsSection}
+ACCESO AL PANEL: Tienes acceso a citas, cotizaciones y tratamientos.
+- Si el paciente da un número o nombre, úsalo para identificarlo.
+- Si ya está identificado (ver abajo), usa esa información para responderle mejor.
+- Registra pacientes nuevos con registerPatient cuando tengas nombre y motivo de consulta.
 
-    const greetingInstruction = isFirstMessage
-      ? `PRIMER MENSAJE - OBLIGATORIO: Siempre menciona "Nexodent" por nombre. Ejemplo: "Muy buen día. Bienvenido(a) a Nexodent, soy ${assistantName}, su asistente. ¿En qué le puedo colaborar el día de hoy?"`
-      : `Conversación activa - NO se presente de nuevo. Saludo de retorno: "Hola de nuevo. Es un gusto saludarle. ¿En qué puedo seguir ayudándole?"`;
+PACIENTE:${patientContext}${dataContext}
+${treatmentsContext}
+${knowledgeSection}
 
-    const systemPrompt = `Eres ${assistantName}, asistente oficial de ${clinicName}, Medellín. Eres una persona real del equipo — NUNCA digas que eres IA o bot.
-HOY: ${colombiaDay} ${colombiaDate}, ${colombiaTime} (Colombia).${patientContext}
+ACCIONES DISPONIBLES (JSON):
+- registerPatient: {"name":"Nombre","phone":null,"treatment":"motivo"}
+- bookAppointment: {"date":"YYYY-MM-DD","startTime":"HH:MM","treatment":"motivo","notes":"nota"}
+- cancelAppointment: {"appointmentId":123}
+- rescheduleAppointment: {"appointmentId":123,"date":"YYYY-MM-DD","startTime":"HH:MM"}
+- updatePhone: {"phone":"numero sin espacios"}
+- updateStatus: {"status":"interested"}
 
-IDENTIDAD - ANDREA (PROFESIONAL Y AMABLE)
-Eres Andrea: una mujer profesional, respetuosa y muy atenta. Tu trato es el de una secretaria de salud de Medellín: formal, educada y cálida, pero siempre manteniendo la seriedad que requiere un servicio odontológico.
+REGLA DE AGENDA:
+- Usa bookAppointment solo para cita NUEVA cuando el paciente confirme fecha y hora.
+- NO uses bookAppointment si el paciente ya tiene cita y quiere cambiarla; usa rescheduleAppointment.
+- Flujo nueva cita: ofreces horarios → paciente confirma → bookAppointment.
+- PROHIBIDO decir "te he agendado" o "cita confirmada" si no incluyes bookAppointment (o rescheduleAppointment) en actions con fecha y hora correctas.
+- Si aún no tienes el nombre del paciente, usa registerPatient y bookAppointment en el mismo JSON cuando ya confirmó horario.
 
-ESTILO DE COMUNICACIÓN:
-- Respeto absoluto: Trata al paciente con cortesía (Usted o Tú de forma respetuosa).
-- Calidez moderada: Usa expresiones amables pero profesionales como "Con mucho gusto", "Es un placer", "Estamos para servirle".
-- Claridad y Eficiencia: Responde de forma directa y útil.
-- NUNCA uses términos como "mi amor", "corazón", "bacano", "chévere", "querido/a" o similares. Esos términos están PROHIBIDOS por ser demasiado informales.
-- El toque de Medellín (Paisa): Se refleja en la amabilidad extrema, la servicialidad y la educación, no en el lenguaje de calle.
+CANCELAR CITA:
+- Si pide cancelar/anular/no puede asistir, identifica la cita en PRÓXIMAS (appointmentId).
+- Si tiene una sola cita próxima, confirma amablemente y usa cancelAppointment con ese appointmentId.
+- Si tiene varias, pregunta cuál cancelar antes de ejecutar la acción.
+- Solo cancelAppointment cuando el paciente confirme que desea cancelar (sí, cancela, listo, confirmo cancelación).
 
-SALUDO - REGLA CRÍTICA:
-${greetingInstruction}
-${needsEscalate ? "URGENCIA: Comprendo su situación. Vamos a priorizar su atención de inmediato para que el equipo le atienda lo antes posible." : ""}
+REAGENDAR CITA:
+- Si pide cambiar fecha/hora/reagendar, identifica appointmentId de PRÓXIMAS.
+- Ofrece horarios de HORARIOS DISPONIBLES; cuando confirme la nueva fecha y hora, usa rescheduleAppointment (NO bookAppointment).
+- rescheduleAppointment mueve la cita existente al nuevo cupo.
 
-ESTILO DE RESPUESTA - OBLIGATORIO:
-- Profesional y amable: Tono de servicio al cliente de alta calidad.
-- Emojis muy moderados: Máximo 1 por mensaje (solo si ayuda a la amabilidad).
-- ${lengthInstruction}
+- Si el paciente aún no está registrado, registerPatient antes de agendar cita nueva.
 
-PROHIBIDO:
-- Lenguaje demasiado informal o callejero.
-- Tono técnico excesivo o difícil de entender.
-- Inventar precios o horarios.
-- Preguntar algo ya respondido.
-- Más de una pregunta a la vez.
-
-EMPATÍA PROFESIONAL:
-- Dolor: "Lamento mucho que esté pasando por ese malestar. Haremos lo posible por atenderle pronto."
-- Miedo: "Entiendo su inquietud. En nuestra clínica contamos con un equipo muy profesional y delicado que le brindará total seguridad."
-- Confusión: "Con gusto le aclaro esa duda para que tenga toda la información necesaria."
-${p?.extraInstructions ? `\nINSTRUCCIONES ESPECIALES:\n${p.extraInstructions}\n` : ""}
-
-FLUJO DE AGENDAMIENTO (en orden):
-1. NECESIDAD - Escucha primero. Si pregunta precios, informa con amabilidad e invita a agendar una valoración.
-2. NOMBRE - Pídelo UNA sola vez con educación. Ej: "¿Me podría compartir su nombre completo para registrarle en nuestro sistema?"
-3. REGISTRO - Al tener nombre completo usa registerPatient.
-4. MOTIVO - Confirma el tratamiento de interés.
-5. HORARIOS - Ofrece opciones concretas: "Perfecto, tenemos disponibilidad para el día [día] a las [hora]. ¿Le queda bien ese horario?"
-6. CELULAR - Pídelo UNA vez si no está registrado.
-7. CONFIRMACIÓN - Al confirmar, usa bookAppointment: "Su cita ha quedado agendada para el [día] a las [hora]. ¡Le esperamos en Nexodent!"
-
-INTERPRETACIÓN INTELIGENTE:a bookAppointment: "De una! Tu cita quedo agendada para el [dia] a las [hora]. Te esperamos!"
-
-INTERPRETACION INTELIGENTE:
-- "9", "10", "3" con horarios en contexto = hora elegida del dia ya discutido
-- Nombre de dia = eleccion del dia ofrecido
-- "manana" = dia siguiente a HOY (${colombiaDate})
-- "si", "dale", "listo", "ok", "de una" = confirma lo ultimo propuesto
-
-INFORMACION DEL CONSULTORIO:
-Horario: ${cfg?.workingHoursStart ? to12h(cfg.workingHoursStart) : "8:00 a.m."} a ${cfg?.workingHoursEnd ? to12h(cfg.workingHoursEnd) : "6:00 p.m."}, lunes a sabado.${cfg?.clinicPhone ? ` Tel: ${cfg.clinicPhone}.` : ""}${cfg?.clinicAddress ? ` Dir: ${cfg.clinicAddress}.` : ""}
-${knowledgeSection}${availableSlotsSection}
-
-FORMATO DE RESPUESTA - CRITICO:
-Responde UNICAMENTE con JSON valido. Sin markdown, sin texto antes ni despues:
-{"message":"tu respuesta al paciente","actions":{"registerPatient":null,"bookAppointment":null,"updatePhone":null}}
-{"message":"tu respuesta al paciente","actions":{"registerPatient":null,"bookAppointment":null,"updatePhone":null,"updateStatus":null}}
-
-ACCIONES:
-- registerPatient: ${patientAlreadyRegistered ? "null - paciente YA registrado." : "{\"name\":\"Nombre Apellido\",\"phone\":null,\"treatment\":\"tratamiento o Consulta general\"} - SOLO la primera vez que tengas nombre completo."}
-- bookAppointment: {"date":"YYYY-MM-DD","startTime":"HH:MM","treatment":"tratamiento","notes":"resumen"} - SOLO cuando confirme fecha Y hora.
-- updatePhone: ${patientHasPhone ? "null - ya tiene celular guardado." : "{\"phone\":\"numero sin espacios\"} - cuando de su celular (10 digitos o +57...)."}
-- updateStatus: {"status":"interested"} - úsalo si el paciente muestra interés real en un tratamiento específico pero aún no agenda. Úsalo como "scheduled" si agendó, o "completed" si terminó.
-
-Sin accion clara = null. testMode = todas null.`;
+FORMATO JSON:
+{"message":"tu respuesta","actions":{...}}`;
 
     const messages = [
-      ...conversationHistory.slice(-20),
+      { role: "system" as const, content: systemPrompt },
+      ...conversationHistory.slice(-15),
       { role: "user" as const, content: patientMessage },
     ];
 
-    const requestParams = {
-      messages: [{ role: "system" as const, content: systemPrompt }, ...messages],
+    const completion = await getGroq().chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages,
       response_format: { type: "json_object" as const },
-      max_tokens: p?.maxResponseLength === "larga" ? 700 : p?.maxResponseLength === "media" ? 500 : 350,
-      temperature: 0.65,
-      top_p: 0.9,
-    };
+      temperature: 0.6,
+    });
 
-    function parseRetryAfterMs(errMsg: string, fallbackMs = 3000): number {
-      const match = errMsg.match(/try again in ([\d.]+)s/i);
-      if (match) return Math.ceil(parseFloat(match[1]) * 1000) + 500;
-      return fallbackMs;
+    const rawContent = completion.choices[0]?.message?.content?.trim() ?? "{}";
+    
+    // Robust JSON extraction to prevent SyntaxError if the LLM adds markdown or text
+    let jsonStr = rawContent;
+    const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      jsonStr = jsonMatch[0];
     }
-
-    async function callWithRetry(model: string, attempt = 0): Promise<Groq.Chat.ChatCompletion> {
-      try {
-        return await getGroq().chat.completions.create({ model, ...requestParams });
-      } catch (err: any) {
-        if (err?.status === 429 && attempt < 2) {
-          const waitMs = parseRetryAfterMs(err?.message ?? "", 3000);
-          logger.warn({ model, attempt, waitMs }, "Rate limit (TPM) — esperando para reintentar");
-          await new Promise(r => setTimeout(r, waitMs));
-          return callWithRetry(model, attempt + 1);
-        }
-        throw err;
-      }
-    }
-
-    const MODEL_CHAIN = [
-      "llama-3.3-70b-versatile",
-      "llama-3.1-70b-versatile",
-      "mixtral-8x7b-32768",
-      "llama-3.1-8b-instant",
-      "gemma2-9b-it",
-    ];
-
-    let completion;
-    let lastErr: any;
-    for (const model of MODEL_CHAIN) {
-      try {
-        completion = await callWithRetry(model);
-        if (model !== MODEL_CHAIN[0]) {
-          logger.warn({ model }, "Usando modelo de respaldo");
-        }
-        break;
-      } catch (err: any) {
-        lastErr = err;
-        if (err?.status === 429) {
-          logger.warn({ model }, "Modelo agotado (429), probando siguiente");
-          continue;
-        }
-        throw err;
-      }
-    }
-    if (!completion) throw lastErr;
-
-    const rawContent = completion.choices[0]?.message?.content?.trim() ?? "";
-
-    let parsed: { message?: string; actions?: AIActions } = {};
-    try {
-      parsed = JSON.parse(rawContent);
-    } catch {
-      logger.warn({ rawContent }, "Groq JSON parse failed, using raw as message");
-      return { message: rawContent, actions: {} };
-    }
+    
+    const parsed = JSON.parse(jsonStr);
 
     return {
-      message: parsed.message?.trim() || "",
+      message: parsed.message || "",
       actions: {
         registerPatient: parsed.actions?.registerPatient ?? null,
         bookAppointment: parsed.actions?.bookAppointment ?? null,
+        cancelAppointment: parsed.actions?.cancelAppointment ?? null,
+        rescheduleAppointment: parsed.actions?.rescheduleAppointment ?? null,
         updatePhone: parsed.actions?.updatePhone ?? null,
         updateStatus: parsed.actions?.updateStatus ?? null,
       },
     };
   } catch (err) {
-    logger.error({ err }, "Error generando respuesta IA con Groq");
+    logger.error({ err }, "Error AI");
+    return {
+      message: "Hola, gracias por escribirnos a Nexodent. Cuéntame, ¿en qué puedo ayudarte?",
+      actions: {},
+    };
+  }
+}
+
+export async function transcribeAudio(buffer: Buffer, mimetype: string): Promise<string> {
+  try {
+    const file = await toFile(buffer, "audio.ogg");
+    const transcription = await getGroq().audio.transcriptions.create({
+      file,
+      model: "whisper-large-v3-turbo",
+      language: "es",
+    });
+    return transcription.text;
+  } catch (err) {
+    logger.error({ err }, "Error STT");
     throw err;
   }
 }

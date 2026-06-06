@@ -1,9 +1,8 @@
 import Layout from "@/components/layout";
-import { useListPatients, useCreatePatient, useUpdatePatient, useDeletePatient, getListPatientsQueryKey, useListTreatments } from "@workspace/api-client-react";
-import { useLocation } from "wouter";
+import { useListPatients, useCreatePatient, useUpdatePatient, useDeletePatient, getListPatientsQueryKey } from "@workspace/api-client-react";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Pencil, Trash2, Phone, Mail, Calendar, ClipboardList, ChevronDown } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Phone, Mail, Calendar, ClipboardList } from "lucide-react";
 import PatientClinicalDialog from "@/components/patient-clinical-dialog";
 
 import { Button } from "@/components/ui/button";
@@ -20,27 +19,36 @@ import { useToast } from "@/hooks/use-toast";
 const statusColors: Record<string, string> = {
   new: "bg-blue-500/20 text-blue-300 border-blue-500/30",
   interested: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
-  to_schedule: "bg-orange-500/20 text-orange-300 border-orange-500/30",
   scheduled: "bg-purple-500/20 text-purple-300 border-purple-500/30",
   attended: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30",
   in_treatment: "bg-green-500/20 text-green-300 border-green-500/30",
   completed: "bg-gray-500/20 text-gray-300 border-gray-500/30",
-  lost: "bg-red-500/20 text-red-300 border-red-500/30",
 };
 
 const statusLabels: Record<string, string> = {
-  new: "Nuevo Contacto",
+  new: "Nuevo",
   interested: "Interesado",
-  to_schedule: "Por Agendar",
   scheduled: "Cita Agendada",
-  attended: "Atendido / Valoración",
+  attended: "Atendido",
   in_treatment: "En Tratamiento",
   completed: "Finalizado",
-  lost: "No Interesado / Perdido",
 };
+
+const referralSourceOptions = [
+  { value: "Instagram", label: "Instagram" },
+  { value: "Facebook", label: "Facebook" },
+  { value: "Google", label: "Google" },
+  { value: "WhatsApp", label: "WhatsApp" },
+  { value: "Referido", label: "Referido" },
+  { value: "Diagnóstico de paso", label: "Diagnóstico de paso" },
+  { value: "Diagnóstico de volante", label: "Diagnóstico de volante" },
+  { value: "Diagnóstico de redes sociales", label: "Diagnóstico de redes sociales" },
+  { value: "Otro", label: "Otro" },
+] as const;
 
 type PatientForm = {
   name: string;
+  cedula: string;
   phone: string;
   email: string;
   age: string;
@@ -49,18 +57,25 @@ type PatientForm = {
   notes: string;
   medicalHistory: string;
   treatmentPrice: string;
+  neighborhood: string;
+  referralSource: string;
+  city: string;
 };
 
 const emptyForm: PatientForm = {
   name: "", phone: "", email: "", age: "", treatment: "", status: "new", notes: "",
-  medicalHistory: "", treatmentPrice: ""
+  medicalHistory: "", treatmentPrice: "", neighborhood: "", referralSource: "", city: "", cedula: "",
 };
 
 
 export default function Patients() {
-  const [, setLocation] = useLocation();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [neighborhoodFilter, setNeighborhoodFilter] = useState("");
+  const [referralFilter, setReferralFilter] = useState("");
+  const [minAgeFilter, setMinAgeFilter] = useState("");
+  const [maxAgeFilter, setMaxAgeFilter] = useState("");
+  const [cityFilter, setCityFilter] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [clinicalPatient, setClinicalPatient] = useState<any | null>(null);
@@ -72,12 +87,16 @@ export default function Patients() {
   const params = {
     search: search || undefined,
     status: statusFilter !== "all" ? statusFilter : undefined,
+    neighborhood: neighborhoodFilter || undefined,
+    referralSource: referralFilter || undefined,
+    city: cityFilter || undefined,
+    minAge: minAgeFilter ? parseInt(minAgeFilter) || undefined : undefined,
+    maxAge: maxAgeFilter ? parseInt(maxAgeFilter) || undefined : undefined,
   };
 
   const { data: patients, isLoading } = useListPatients(params, {
     query: { queryKey: getListPatientsQueryKey(params) }
   });
-  const { data: treatments } = useListTreatments();
   const createPatient = useCreatePatient();
   const updatePatient = useUpdatePatient();
   const deletePatient = useDeletePatient();
@@ -88,6 +107,7 @@ export default function Patients() {
   const openEdit = (p: any) => {
     setForm({
       name: p.name,
+      cedula: (p as { cedula?: string }).cedula ?? "",
       phone: p.phone,
       email: p.email ?? "",
       age: p.age?.toString() ?? "",
@@ -95,7 +115,10 @@ export default function Patients() {
       status: p.status,
       notes: p.notes ?? "",
       medicalHistory: p.medicalHistory ?? "",
-      treatmentPrice: p.treatmentPrice?.toString() ?? ""
+      treatmentPrice: p.treatmentPrice?.toString() ?? "",
+      neighborhood: p.neighborhood ?? "",
+      referralSource: p.referralSource ?? "",
+      city: p.city ?? "",
     });
     setEditingId(p.id);
     setDialogOpen(true);
@@ -105,6 +128,7 @@ export default function Patients() {
   const handleSave = () => {
     const data = {
       name: form.name,
+      cedula: form.cedula || undefined,
       phone: form.phone,
       email: form.email || undefined,
       age: form.age ? parseInt(form.age) : undefined,
@@ -113,6 +137,9 @@ export default function Patients() {
       notes: form.notes || undefined,
       medicalHistory: form.medicalHistory || undefined,
       treatmentPrice: form.treatmentPrice ? parseInt(form.treatmentPrice) : undefined,
+      neighborhood: form.neighborhood || undefined,
+      referralSource: form.referralSource || undefined,
+      city: form.city || undefined,
     };
 
     if (editingId) {
@@ -148,7 +175,7 @@ export default function Patients() {
           </Button>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Buscar por nombre..." className="pl-9 bg-card border-border" value={search} onChange={e => setSearch(e.target.value)} />
@@ -162,6 +189,50 @@ export default function Patients() {
               {Object.entries(statusLabels).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Input
+            placeholder="Barrio"
+            className="w-40 bg-card border-border"
+            value={neighborhoodFilter}
+            onChange={e => setNeighborhoodFilter(e.target.value)}
+          />
+          <Select
+            value={referralFilter || "all"}
+            onValueChange={v => setReferralFilter(v === "all" ? "" : v)}
+          >
+            <SelectTrigger className="w-40 bg-card border-border">
+              <SelectValue placeholder="Cómo llegó" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos los orígenes</SelectItem>
+              {referralSourceOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Edad mín."
+              type="number"
+              className="w-24 bg-card border-border"
+              value={minAgeFilter}
+              onChange={e => setMinAgeFilter(e.target.value)}
+            />
+            <Input
+              placeholder="Edad máx."
+              type="number"
+              className="w-24 bg-card border-border"
+              value={maxAgeFilter}
+              onChange={e => setMaxAgeFilter(e.target.value)}
+            />
+          </div>
+          <Input
+            placeholder="Ciudad / Ubicación"
+            className="w-44 bg-card border-border"
+            value={cityFilter}
+            onChange={e => setCityFilter(e.target.value)}
+          />
         </div>
 
         {isLoading ? (
@@ -218,10 +289,10 @@ export default function Patients() {
                       variant="secondary" 
                       size="sm" 
                       className="w-full bg-accent/10 text-accent hover:bg-accent/20 border-accent/20"
-                      onClick={() => setLocation(`/clinical/${p.id}`)}
+                      onClick={() => setClinicalPatient(p)}
                     >
                       <ClipboardList className="h-3.5 w-3.5 mr-1" />
-                      Historia Clínica
+                      Ficha Clínica
                     </Button>
                   </div>
 
@@ -233,15 +304,24 @@ export default function Patients() {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="bg-card border-border max-w-2xl max-h-[90vh] flex flex-col p-0">
-          <DialogHeader className="p-6 pb-2">
+        <DialogContent className="bg-card border-border max-w-2xl max-h-[90vh] flex flex-col gap-0 p-0 overflow-hidden">
+          <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
             <DialogTitle>{editingId ? "Editar Paciente" : "Nuevo Paciente"}</DialogTitle>
           </DialogHeader>
-          <div className="flex-1 overflow-y-auto px-6 py-2 custom-scrollbar">
-            <div className="grid grid-cols-2 gap-4 py-2">
+          <div className="overflow-y-auto px-6 py-2 flex-1 min-h-0">
+          <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2 space-y-1">
               <Label>Nombre completo *</Label>
               <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="bg-background" placeholder="Ej: Juan Pérez" />
+            </div>
+            <div className="col-span-2 space-y-1">
+              <Label>Cédula (número de historia clínica)</Label>
+              <Input
+                value={form.cedula}
+                onChange={e => setForm(f => ({ ...f, cedula: e.target.value }))}
+                className="bg-background"
+                placeholder="Ej: 1234567890"
+              />
             </div>
             <div className="space-y-1">
               <Label>Teléfono / WhatsApp *</Label>
@@ -264,19 +344,43 @@ export default function Patients() {
             </div>
             <div className="col-span-2 space-y-1">
               <Label>Tratamiento de interés</Label>
-              <Select value={form.treatment} onValueChange={v => setForm(f => ({ ...f, treatment: v }))}>
+              <Input value={form.treatment} onChange={e => setForm(f => ({ ...f, treatment: e.target.value }))} className="bg-background" placeholder="Ej: Implantes, Prótesis removible..." />
+            </div>
+            <div className="space-y-1">
+              <Label>Barrio</Label>
+              <Input
+                value={form.neighborhood}
+                onChange={e => setForm(f => ({ ...f, neighborhood: e.target.value }))}
+                className="bg-background"
+                placeholder="Ej: Laureles"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Cómo llegó a la clínica</Label>
+              <Select
+                value={form.referralSource}
+                onValueChange={v => setForm(f => ({ ...f, referralSource: v }))}
+              >
                 <SelectTrigger className="bg-background">
-                  <SelectValue placeholder="Selecciona un tratamiento..." />
+                  <SelectValue placeholder="Selecciona una opción" />
                 </SelectTrigger>
-                <SelectContent className="max-h-[300px] overflow-y-auto">
-                  {treatments?.map(t => (
-                    <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                <SelectContent>
+                  {referralSourceOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
                   ))}
-                  <SelectItem value="Limpieza">Limpieza</SelectItem>
-                  <SelectItem value="Valoración">Valoración</SelectItem>
-                  <SelectItem value="Urgencia">Urgencia</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Ciudad / Ubicación</Label>
+              <Input
+                value={form.city}
+                onChange={e => setForm(f => ({ ...f, city: e.target.value }))}
+                className="bg-background"
+                placeholder="Ej: Medellín"
+              />
             </div>
             <div className="col-span-2 space-y-1">
               <Label>Notas Generales</Label>
@@ -309,10 +413,10 @@ export default function Patients() {
                 </div>
               </div>
             </div>
-            </div>
+          </div>
           </div>
 
-          <DialogFooter className="p-6 pt-2 border-t border-border/30">
+          <DialogFooter className="px-6 py-4 shrink-0 border-t border-border/50 bg-card">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleSave} disabled={createPatient.isPending || updatePatient.isPending} className="bg-primary">
               {editingId ? "Guardar cambios" : "Crear paciente"}

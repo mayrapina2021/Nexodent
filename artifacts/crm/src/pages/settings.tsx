@@ -45,6 +45,7 @@ export default function Settings() {
     clinicName: "", clinicPhone: "", workingHoursStart: "08:00", workingHoursEnd: "18:00",
     workingDays: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"],
     defaultAppointmentDuration: "60", aiGreetingMessage: "", aiSignature: "", autoConfirmAppointments: false,
+    habilitationCode: "",
   });
 
   useEffect(() => {
@@ -84,7 +85,7 @@ export default function Settings() {
         aiSignature: form.aiSignature || undefined,
         autoConfirmAppointments: form.autoConfirmAppointments,
         habilitationCode: form.habilitationCode || undefined,
-      }
+      } as any,
     }, {
       onSuccess: () => {
         toast({ title: "Configuración guardada correctamente" });

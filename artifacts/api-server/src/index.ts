@@ -1,9 +1,18 @@
 import app from "./app";
 import { logger } from "./lib/logger";
-import { startWhatsApp } from "./lib/whatsapp";
+import { startWhatsApp, getWAState } from "./lib/whatsapp";
 import { runStartupSeed } from "./lib/startup-seed";
 import { startAutomationsEngine } from "./lib/automations-engine";
+import { syncAllConversationsWithPatients } from "./lib/conversation-patient-sync";
+import ffmpeg from "fluent-ffmpeg";
+import ffmpegStatic from "ffmpeg-static";
+import fs from "fs";
 
+if (ffmpegStatic && fs.existsSync(ffmpegStatic)) {
+  ffmpeg.setFfmpegPath(ffmpegStatic);
+} else {
+  logger.warn("ffmpeg-static binary not found, falling back to system ffmpeg");
+}
 
 const rawPort = process.env["PORT"];
 
@@ -25,16 +34,20 @@ app.listen(port, (err) => {
 
   logger.info({ port }, "Server listening");
 
-  // Seed DB (admin user + AI knowledge) on every startup
   runStartupSeed().catch((err) => {
     logger.error({ err }, "Error en startup seed");
   });
 
-  // Iniciar WhatsApp Web (Baileys) en background
+  setTimeout(() => {
+    const wa = getWAState();
+    syncAllConversationsWithPatients(wa.phone).catch((err) => {
+      logger.error({ err }, "Error sincronizando conversaciones con pacientes");
+    });
+  }, 15000);
+
   startWhatsApp().catch((err) => {
     logger.error({ err }, "Error iniciando WhatsApp");
   });
 
-  // Iniciar motor de automatizaciones
   startAutomationsEngine();
 });

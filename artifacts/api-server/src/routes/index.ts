@@ -11,6 +11,7 @@ import treatmentsRouter from "./treatments";
 import settingsRouter from "./settings";
 import aiTrainingRouter from "./ai-training";
 import clinicalRouter from "./clinical";
+import billingRouter from "./billing";
 import inventoryRouter from "./inventory";
 
 
@@ -28,6 +29,7 @@ router.use(treatmentsRouter);
 router.use(settingsRouter);
 router.use(aiTrainingRouter);
 router.use(clinicalRouter);
+router.use(billingRouter);
 router.use(inventoryRouter);
 
 

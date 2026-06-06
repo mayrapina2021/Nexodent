@@ -129,15 +129,24 @@ export const ListPatientsQueryParams = zod.object({
   search: zod.coerce.string().optional(),
   status: zod.coerce.string().optional(),
   treatment: zod.coerce.string().optional(),
+  neighborhood: zod.coerce.string().optional(),
+  referralSource: zod.coerce.string().optional(),
+  city: zod.coerce.string().optional(),
+  minAge: zod.coerce.number().optional(),
+  maxAge: zod.coerce.number().optional(),
 });
 
 export const ListPatientsResponseItem = zod.object({
   id: zod.number(),
   name: zod.string(),
+  cedula: zod.string().nullish(),
   phone: zod.string(),
   email: zod.string().optional(),
   age: zod.number().optional(),
   treatment: zod.string().optional(),
+  neighborhood: zod.string().nullish(),
+  referralSource: zod.string().nullish(),
+  city: zod.string().nullish(),
   status: zod.enum([
     "new",
     "interested",

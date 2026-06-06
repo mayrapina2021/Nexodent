@@ -5,16 +5,18 @@ import makeWASocket, {
 } from "@whiskeysockets/baileys";
 import { Boom } from "@hapi/boom";
 import QRCode from "qrcode";
-import { db, conversationsTable, messagesTable, patientsTable, appointmentsTable, settingsTable } from "@workspace/db";
-import { eq, sql, and } from "drizzle-orm";
-import { generateAIResponse, transcribeAudio, generateVoiceFile } from "./groq";
+import { db, conversationsTable, messagesTable, patientsTable, settingsTable } from "@workspace/db";
+import { eq, sql, or, and, desc } from "drizzle-orm";
+import { generateAIResponse } from "./groq";
+import { synthesizeAudio } from "./tts";
 import { logger } from "./logger";
 import { usePostgresAuthState } from "./postgres-auth-state";
-import { downloadMediaMessage } from "@whiskeysockets/baileys";
-import fs from "fs";
-import path from "path";
-import tmp from "tmp";
-import ffmpeg from "fluent-ffmpeg";
+import { getAvailableSlots } from "./appointment-slots";
+import { processAIActions } from "./ai-actions";
+import { amendAiMessageIfBookingFailed } from "./booking-message";
+import { parseIncomingContact, resolveOutboundJid, phoneToJidIfValid } from "./jid-utils";
+import { resolveConversationIdentity, isValidColombianPhone } from "./conversation-patient-sync";
+import { parseWhatsAppMessage } from "./whatsapp-message-parser";
 
 export interface WAState {
   connected: boolean;
@@ -25,12 +27,10 @@ export interface WAState {
   botEnabled: boolean;
 }
 
-// Deduplicate incoming messages to prevent double responses (Baileys may re-deliver)
 const _processedMsgIds = new Set<string>();
 function isAlreadyProcessed(msgId: string): boolean {
   if (_processedMsgIds.has(msgId)) return true;
   _processedMsgIds.add(msgId);
-  // Keep set bounded: discard old IDs after 500 entries
   if (_processedMsgIds.size > 500) {
     const first = _processedMsgIds.values().next().value;
     if (first) _processedMsgIds.delete(first);
@@ -51,29 +51,74 @@ let _state: WAState = {
 export const getWhatsAppSock = () => sock;
 export const getWhatsAppStatus = () => _state.status;
 
-
 export function getWAState(): WAState {
   return { ..._state };
+}
+
+export async function syncBotEnabled(enabled?: boolean): Promise<boolean> {
+  try {
+    if (typeof enabled === "boolean") {
+      await db.update(settingsTable).set({ aiBotEnabled: enabled });
+      _state.botEnabled = enabled;
+      return enabled;
+    }
+    const [settings] = await db.select().from(settingsTable).limit(1);
+    if (settings && typeof settings.aiBotEnabled === "boolean") {
+      _state.botEnabled = settings.aiBotEnabled;
+      return settings.aiBotEnabled;
+    }
+  } catch (err) {
+    logger.error({ err }, "Error sincronizando botEnabled con DB");
+  }
+  return _state.botEnabled;
 }
 
 export function getBotEnabled(): boolean {
   return _state.botEnabled;
 }
 
-export function setBotEnabled(enabled: boolean): void {
-  _state.botEnabled = enabled;
-  logger.info({ botEnabled: enabled }, "Bot IA global toggled");
+export async function setBotEnabled(enabled: boolean): Promise<void> {
+  await syncBotEnabled(enabled);
+  logger.info({ botEnabled: enabled }, "Bot IA global actualizado y persistido");
+}
+
+export function phoneToJid(phone: string): string {
+  const jid = phoneToJidIfValid(phone);
+  if (jid) return jid;
+  const clean = phone.replace(/\D/g, "");
+  const finalPhone = clean.length === 10 && clean.startsWith("3") ? `57${clean}` : clean;
+  return `${finalPhone}@s.whatsapp.net`;
 }
 
 export async function sendWAMessage(jid: string, text: string): Promise<boolean> {
   if (!sock || !_state.connected) return false;
+  if (!jid?.includes("@")) return false;
   try {
     await sock.sendMessage(jid, { text });
     return true;
   } catch (err) {
-    logger.error({ err }, "Error enviando mensaje WhatsApp");
+    logger.error({ err, jid }, "Error enviando mensaje WhatsApp");
     return false;
   }
+}
+
+export async function sendMessageToConversation(
+  conv: { whatsappJid?: string | null; phone: string },
+  text: string,
+  patientPhone?: string | null,
+): Promise<boolean> {
+  const jid = resolveOutboundJid(conv, patientPhone);
+  if (!jid) {
+    logger.warn({ phone: conv.phone, whatsappJid: conv.whatsappJid }, "No se pudo resolver JID de WhatsApp");
+    return false;
+  }
+  return sendWAMessage(jid, text);
+}
+
+export async function sendMessageToPhone(phone: string, text: string): Promise<boolean> {
+  const jid = phoneToJidIfValid(phone);
+  if (!jid) return false;
+  return sendWAMessage(jid, text);
 }
 
 export async function disconnectWA(): Promise<void> {
@@ -81,7 +126,6 @@ export async function disconnectWA(): Promise<void> {
     try { await sock.logout(); } catch {}
     sock = null;
   }
-  // Clear persisted auth from DB so next start shows QR
   try {
     const { clearAuth } = await usePostgresAuthState();
     await clearAuth();
@@ -96,389 +140,266 @@ export async function disconnectWA(): Promise<void> {
   };
 }
 
-function addMinutes(time: string, minutes: number): string {
-  const [h, m] = time.split(":").map(Number);
-  const total = h * 60 + m + minutes;
-  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+async function findMessageByWhatsappId(whatsappMsgId: string) {
+  const [row] = await db.select().from(messagesTable)
+    .where(eq(messagesTable.whatsappMsgId, whatsappMsgId))
+    .limit(1);
+  return row ?? null;
 }
 
-function getColombiaDate(offsetDays = 0): string {
-  const now = new Date();
-  now.setDate(now.getDate() + offsetDays);
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Bogota",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(now);
+async function findRecentDuplicateMessage(
+  conversationId: number,
+  sender: "agent" | "ai",
+  content: string,
+  withinMs = 120_000,
+) {
+  const cutoff = new Date(Date.now() - withinMs);
+  const recent = await db.select().from(messagesTable)
+    .where(and(
+      eq(messagesTable.conversationId, conversationId),
+      eq(messagesTable.sender, sender),
+    ))
+    .orderBy(desc(messagesTable.sentAt))
+    .limit(8);
+
+  const normalized = content.trim();
+  return recent.find((m) => m.content.trim() === normalized && m.sentAt >= cutoff) ?? null;
 }
 
-function getColombiaTime(): string {
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: "America/Bogota",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(new Date());
-}
+async function resolveOrCreateConversation(
+  whatsappJid: string,
+  formattedPhone: string,
+  phone: string,
+  pushName: string,
+) {
+  const identity = await resolveConversationIdentity(formattedPhone, pushName);
 
-function getColombiaWeekday(): string {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Bogota",
-    weekday: "long",
-  }).format(new Date()).toLowerCase();
-}
+  const allConvs = await db.select().from(conversationsTable)
+    .where(or(
+      eq(conversationsTable.whatsappJid, whatsappJid),
+      eq(conversationsTable.phone, identity.phone),
+      eq(conversationsTable.phone, formattedPhone),
+      eq(conversationsTable.phone, phone),
+    ))
+    .orderBy(sql`${conversationsTable.lastMessageAt} desc nulls last`);
 
-async function getAvailableSlots(): Promise<{ label: string; slots: string[] }[]> {
-  try {
-    const [settings] = await db.select().from(settingsTable).limit(1);
-    const startHour = settings?.workingHoursStart ?? "08:00";
-    const endHour = settings?.workingHoursEnd ?? "18:00";
-    const duration = settings?.defaultAppointmentDuration ?? 60;
-    const workingDays = (settings?.workingDays ?? "monday,tuesday,wednesday,thursday,friday,saturday").split(",");
-
-    const dayNames: Record<string, string> = {
-      monday: "lunes", tuesday: "martes", wednesday: "miércoles",
-      thursday: "jueves", friday: "viernes", saturday: "sábado", sunday: "domingo",
-    };
-
-    const results: { label: string; slots: string[] }[] = [];
-    const currentTime = getColombiaTime();
-
-    for (let offset = 0; offset <= 2; offset++) {
-      const dateStr = getColombiaDate(offset);
-      const weekday = new Intl.DateTimeFormat("en-US", {
-        timeZone: "America/Bogota",
-        weekday: "long",
-      }).format(new Date(dateStr + "T12:00:00")).toLowerCase();
-
-      if (!workingDays.includes(weekday)) continue;
-
-      const existing = await db.select().from(appointmentsTable)
-        .where(and(
-          eq(appointmentsTable.date, dateStr),
-          sql`${appointmentsTable.status} != 'cancelled'`
-        ));
-
-      const slots: string[] = [];
-      let current = startHour;
-      while (current < endHour) {
-        const next = addMinutes(current, duration);
-        if (next > endHour) break;
-        const conflict = existing.some(a => !(a.endTime <= current || a.startTime >= next));
-        const isPast = offset === 0 && current <= currentTime;
-        if (!conflict && !isPast) {
-          slots.push(current);
-        }
-        current = next;
+  let conv;
+  if (allConvs.length === 0) {
+    [conv] = await db.insert(conversationsTable).values({
+      patientId: identity.patientId,
+      patientName: identity.patientName,
+      phone: identity.phoneIsValid ? identity.phone : formattedPhone,
+      whatsappJid,
+      status: "active",
+      aiMode: true,
+      label: "patient",
+      unreadCount: 0,
+      lastMessage: null,
+      lastMessageAt: new Date(),
+    }).returning();
+  } else {
+    [conv] = allConvs;
+    if (allConvs.length > 1) {
+      logger.warn({ phone: formattedPhone, count: allConvs.length }, "Fusionando conversaciones duplicadas...");
+      const toRemove = allConvs.slice(1);
+      for (const rem of toRemove) {
+        await db.update(messagesTable).set({ conversationId: conv.id }).where(eq(messagesTable.conversationId, rem.id));
+        await db.delete(conversationsTable).where(eq(conversationsTable.id, rem.id));
       }
-
-      const labelDay = offset === 0 ? "Hoy" : offset === 1 ? "Mañana" : dayNames[weekday] ?? dateStr;
-      const dateFormatted = new Intl.DateTimeFormat("es-CO", {
-        timeZone: "America/Bogota",
-        day: "numeric",
-        month: "long",
-      }).format(new Date(dateStr + "T12:00:00"));
-
-      results.push({ label: `${labelDay} ${dateFormatted} (${dateStr})`, slots });
     }
-
-    return results;
-  } catch (err) {
-    logger.error({ err }, "Error obteniendo horarios disponibles");
-    return [];
   }
+
+  const refreshedIdentity = await resolveConversationIdentity(
+    isValidColombianPhone(formattedPhone) ? formattedPhone : conv.phone,
+    pushName,
+    conv.patientId ?? identity.patientId,
+  );
+
+  return {
+    ...conv,
+    whatsappJid,
+    patientId: refreshedIdentity.patientId,
+    patientName: refreshedIdentity.patientName,
+    phone: refreshedIdentity.phoneIsValid ? refreshedIdentity.phone : conv.phone,
+  };
 }
 
 async function handleIncomingMessage(msg: proto.IWebMessageInfo): Promise<void> {
-  if (!msg.key || msg.key.fromMe) return;
+  if (!msg.key) return;
 
   const jid = msg.key.remoteJid ?? "";
-  if (!jid || jid.includes("@g.us")) return;
+  if (!jid || jid.includes("@g.us") || jid === "status@broadcast") return;
 
-  // Deduplication: skip if we already processed this message ID
+  const fromMe = msg.key.fromMe === true;
   const msgId = msg.key.id ?? "";
+
   if (msgId && isAlreadyProcessed(msgId)) {
     logger.info({ msgId }, "Mensaje ya procesado, ignorando duplicado");
     return;
   }
 
-  // Detectar si es un audio/nota de voz (PTT o audio normal)
-  const isAudio = !!msg.message?.audioMessage;
-
-  const text =
-    msg.message?.conversation ??
-    msg.message?.extendedTextMessage?.text ??
-    msg.message?.imageMessage?.caption ??
-    "";
-
-  // Si es audio, transcribirlo primero
-  let processedText = text;
-  if (isAudio) {
-    try {
-      logger.info({ jid }, "Audio recibido — Iniciando transcripción...");
-      const buffer = await downloadMediaMessage(msg as any, "buffer", {}, { logger: logger as any, reuploadRequest: (sock as any).updateMediaMessage });
-      const tmpFile = tmp.fileSync({ postfix: ".ogg" });
-      const mp3File = tmp.fileSync({ postfix: ".mp3" });
-      fs.writeFileSync(tmpFile.name, buffer as Buffer);
-
-      // Convertir OGG/OPUS de WhatsApp a MP3 para Whisper
-      await new Promise((resolve, reject) => {
-        ffmpeg(tmpFile.name)
-          .toFormat("mp3")
-          .on("end", resolve)
-          .on("error", reject)
-          .save(mp3File.name);
-      });
-
-      processedText = await transcribeAudio(mp3File.name);
-      logger.info({ jid, transcription: processedText }, "Transcripción completada");
-
-      tmpFile.removeCallback();
-      mp3File.removeCallback();
-
-      if (!processedText.trim()) {
-        await sock?.sendMessage(jid, { text: "No pude entender el audio, ¿me lo podrías repetir o escribir? 😊" });
-        return;
-      }
-    } catch (err) {
-      logger.error({ err }, "Error procesando audio de WhatsApp");
-      await sock?.sendMessage(jid, { text: "Tuve un problema técnico procesando tu audio, ¿me podrías escribir? 😊" });
+  if (msgId) {
+    const existing = await findMessageByWhatsappId(msgId);
+    if (existing) {
+      logger.info({ msgId }, "Mensaje WhatsApp ya en base de datos");
       return;
     }
   }
 
-  if (!processedText.trim()) return;
+  const contact = parseIncomingContact(msg);
+  if (!contact) return;
 
-  const phone = jid.split("@")[0].split(":")[0];
-  const formattedPhone = phone.startsWith("+") ? phone : `+${phone}`;
+  const { whatsappJid, phone: formattedPhone } = contact;
+  const phone = formattedPhone.replace(/^\+/, "");
   const pushName = msg.pushName ?? formattedPhone;
 
-  logger.info({ jid, text: processedText }, "Mensaje entrante de WhatsApp");
+  const globalBotEnabled = await syncBotEnabled();
+  const [existingConv] = await db.select().from(conversationsTable)
+    .where(or(eq(conversationsTable.phone, formattedPhone), eq(conversationsTable.phone, phone)))
+    .orderBy(sql`${conversationsTable.lastMessageAt} desc nulls last`);
+
+  const shouldTranscribeAudio = !fromMe && globalBotEnabled && (!existingConv || existingConv.aiMode);
+
+  const parsed = await parseWhatsAppMessage(msg, sock, { transcribeAudio: shouldTranscribeAudio });
+  if (!parsed?.text.trim() && !parsed?.mediaData) return;
+
+  const text = parsed.text.trim() || (parsed.mediaData ? parsed.text : "");
+  if (!text && !parsed.mediaData) return;
+
+  logger.info({ jid, fromMe, text, messageType: parsed.messageType }, "Mensaje de WhatsApp recibido");
 
   try {
-    let [conv] = await db.select().from(conversationsTable)
-      .where(eq(conversationsTable.phone, formattedPhone));
+    let conv = await resolveOrCreateConversation(whatsappJid, formattedPhone, phone, pushName);
 
-    if (!conv) {
-      const [existingPatient] = await db.select().from(patientsTable)
-        .where(eq(patientsTable.phone, formattedPhone));
-
-      [conv] = await db.insert(conversationsTable).values({
-        patientId: existingPatient?.id ?? null,
-        patientName: existingPatient?.name ?? pushName,
-        phone: formattedPhone,
-        status: "active",
-        aiMode: true,
-        label: "patient",
-        unreadCount: 1,
-        lastMessage: processedText,
-        lastMessageAt: new Date(),
-      }).returning();
+    if (fromMe) {
+      const dupAgent = await findRecentDuplicateMessage(conv.id, "agent", text);
+      if (dupAgent) {
+        if (msgId) {
+          await db.update(messagesTable).set({ whatsappMsgId: msgId }).where(eq(messagesTable.id, dupAgent.id));
+        }
+        return;
+      }
+      const dupAi = await findRecentDuplicateMessage(conv.id, "ai", text);
+      if (dupAi) {
+        if (msgId) {
+          await db.update(messagesTable).set({ whatsappMsgId: msgId }).where(eq(messagesTable.id, dupAi.id));
+        }
+        return;
+      }
     }
+
+    const preview = text.length > 120 ? `${text.slice(0, 117)}...` : text;
 
     await db.insert(messagesTable).values({
       conversationId: conv.id,
-      content: processedText,
-      sender: "patient",
-      read: false,
+      content: text,
+      sender: fromMe ? "agent" : "patient",
+      messageType: parsed.messageType,
+      mediaMimeType: parsed.mediaMimeType ?? null,
+      mediaData: parsed.mediaData ?? null,
+      whatsappMsgId: msgId || null,
+      read: fromMe,
     });
 
     await db.update(conversationsTable).set({
-      lastMessage: processedText,
+      lastMessage: preview,
       lastMessageAt: new Date(),
-      unreadCount: sql`${conversationsTable.unreadCount} + 1`,
+      unreadCount: fromMe ? conv.unreadCount : sql`${conversationsTable.unreadCount} + 1`,
+      whatsappJid,
+      patientId: conv.patientId,
+      patientName: conv.patientName,
+      phone: conv.phone,
     }).where(eq(conversationsTable.id, conv.id));
 
+    if (fromMe) return;
+
     const [latestConv] = await db.select().from(conversationsTable).where(eq(conversationsTable.id, conv.id));
-    const aiEnabled = latestConv?.aiMode && _state.botEnabled;
+    const aiEnabled = latestConv?.aiMode === true && globalBotEnabled === true;
 
-    if (aiEnabled) {
+    logger.info({ phone: formattedPhone, aiMode: latestConv?.aiMode, globalBotEnabled, aiEnabled }, "Evaluando si responder con IA");
+
+    if (!aiEnabled) return;
+
+    let aiText = "";
+    try {
+      const availableSlots = await getAvailableSlots();
+      const aiResult = await generateAIResponse(conv.id, text, { availableSlots });
+
       try {
-        const availableSlots = await getAvailableSlots();
-        const aiResult = await generateAIResponse(conv.id, processedText, { availableSlots });
-        const aiText = aiResult.message;
-
-        if (aiText) {
-          await db.insert(messagesTable).values({
-            conversationId: conv.id,
-            content: aiText,
-            sender: "ai",
-            read: true,
-          });
-
-          await db.update(conversationsTable).set({
-            lastMessage: aiText,
-            lastMessageAt: new Date(),
-          }).where(eq(conversationsTable.id, conv.id));
-
-          if (sock) {
-            if (isAudio) {
-              // 🎙️ El paciente mandó AUDIO → Dante responde SOLO con voz (sin texto)
-              logger.info({ jid }, "Generando respuesta de voz con edge-tts...");
-              const voiceFile = await generateVoiceFile(aiText);
-              if (voiceFile) {
-                try {
-                  const audioBuffer = fs.readFileSync(voiceFile);
-                  await sock.sendMessage(jid, {
-                    audio: audioBuffer,
-                    mimetype: "audio/mpeg",
-                    ptt: true,
-                  });
-                  fs.unlinkSync(voiceFile); // limpiar archivo temporal
-                } catch (voiceErr) {
-                  logger.error({ voiceErr }, "Error enviando voz, enviando texto como fallback");
-                  await sock.sendMessage(jid, { text: aiText });
-                }
-              } else {
-                // Si edge-tts falla, enviar texto como fallback
-                await sock.sendMessage(jid, { text: aiText });
-              }
-            } else {
-              // 💬 El paciente mandó TEXTO → Dante responde SOLO con texto
-              await sock.sendMessage(jid, { text: aiText });
-            }
-          }
-        }
-        
-        const { registerPatient, bookAppointment, updatePhone } = aiResult.actions;
-        // ... rest of processing ...
-
-      if (registerPatient && !conv.patientId && registerPatient.name) {
-        try {
-          // Register with WhatsApp JID phone as fallback; patient's own phone comes via updatePhone later
-          const contactPhone = registerPatient.phone
-            ? (registerPatient.phone.startsWith("+") ? registerPatient.phone : `+${registerPatient.phone.replace(/\D/g, "")}`)
-            : formattedPhone;
-
-          const existingByPhone = await db.select().from(patientsTable)
-            .where(eq(patientsTable.phone, contactPhone));
-
-          let patientId: number;
-          if (existingByPhone.length > 0) {
-            patientId = existingByPhone[0].id;
-            await db.update(patientsTable).set({
-              treatment: registerPatient.treatment || existingByPhone[0].treatment,
-            }).where(eq(patientsTable.id, patientId));
-          } else {
-            const [newPatient] = await db.insert(patientsTable).values({
-              name: registerPatient.name,
-              phone: contactPhone,
-              treatment: registerPatient.treatment || "Consulta general",
-              status: "new",
-            }).returning();
-            patientId = newPatient.id;
-          }
-
-          await db.update(conversationsTable).set({
-            patientId,
-            patientName: registerPatient.name,
-          }).where(eq(conversationsTable.id, conv.id));
-
-          conv = { ...conv, patientId, patientName: registerPatient.name };
-          logger.info({ patientId, name: registerPatient.name, phone: contactPhone }, "Paciente registrado automáticamente por bot");
-        } catch (err) {
-          logger.error({ err }, "Error registrando paciente desde bot");
-        }
+        const { conversation: updatedConv, bookingOutcome } = await processAIActions(
+          {
+            id: conv.id,
+            patientId: conv.patientId,
+            patientName: conv.patientName,
+            phone: formattedPhone,
+          },
+          formattedPhone,
+          aiResult.actions,
+          "whatsapp",
+          { patientMessage: text },
+        );
+        conv = { ...conv, ...updatedConv, patientName: updatedConv.patientName ?? conv.patientName };
+        aiText = amendAiMessageIfBookingFailed(aiResult.message, bookingOutcome);
+      } catch (actionErr) {
+        logger.error({ actionErr, conversationId: conv.id }, "Error en acciones IA; se envía respuesta al paciente igual");
+        aiText = aiResult.message;
       }
 
-      // Update patient phone when they provide their own contact number
-      if (updatePhone && updatePhone.phone) {
-        try {
-          let patientId = conv.patientId;
-          if (!patientId) {
-            const [byWAPhone] = await db.select().from(patientsTable).where(eq(patientsTable.phone, formattedPhone));
-            patientId = byWAPhone?.id ?? null;
-          }
-          if (patientId) {
-            const cleanPhone = updatePhone.phone.replace(/\D/g, "");
-            const normalized = cleanPhone.startsWith("57") && cleanPhone.length === 12
-              ? `+${cleanPhone}`
-              : cleanPhone.length === 10
-              ? `+57${cleanPhone}`
-              : `+${cleanPhone}`;
-            await db.update(patientsTable).set({ phone: normalized }).where(eq(patientsTable.id, patientId));
-            logger.info({ patientId, phone: normalized }, "Teléfono del paciente actualizado por bot");
-          }
-        } catch (err) {
-          logger.error({ err }, "Error actualizando teléfono del paciente");
-        }
-      }
-
-      if (bookAppointment && bookAppointment.date && bookAppointment.startTime) {
-        try {
-          let patientId = conv.patientId;
-          if (!patientId) {
-            const [existingByPhone] = await db.select().from(patientsTable)
-              .where(eq(patientsTable.phone, formattedPhone));
-            patientId = existingByPhone?.id ?? null;
-          }
-
-          if (patientId) {
-            const [settings] = await db.select().from(settingsTable).limit(1);
-            const duration = settings?.defaultAppointmentDuration ?? 60;
-            const endTime = addMinutes(bookAppointment.startTime, duration);
-
-            // Guard 1: check time slot conflict (another patient already at that time)
-            const slotConflicts = await db.select().from(appointmentsTable)
-              .where(and(
-                eq(appointmentsTable.date, bookAppointment.date),
-                sql`${appointmentsTable.status} != 'cancelled'`,
-              ));
-            const hasSlotConflict = slotConflicts.some(
-              a => !(a.endTime <= bookAppointment.startTime || a.startTime >= endTime)
-            );
-
-            // Guard 2: same patient already has a non-cancelled appointment that day
-            const patientConflicts = await db.select().from(appointmentsTable)
-              .where(and(
-                eq(appointmentsTable.patientId, patientId),
-                eq(appointmentsTable.date, bookAppointment.date),
-                sql`${appointmentsTable.status} != 'cancelled'`,
-              ));
-            const hasPatientConflict = patientConflicts.length > 0;
-
-            if (hasSlotConflict) {
-              logger.warn({ bookAppointment }, "Cita rechazada: franja horaria ya ocupada");
-            } else if (hasPatientConflict) {
-              logger.warn({ patientId, date: bookAppointment.date }, "Cita rechazada: paciente ya tiene cita ese día");
-            } else {
-              const apptNotes = bookAppointment.notes
-                ? `${bookAppointment.notes} | Agendado por WhatsApp Bot`
-                : "Agendado automáticamente por WhatsApp Bot";
-
-              const [appt] = await db.insert(appointmentsTable).values({
-                patientId,
-                treatment: bookAppointment.treatment || "Consulta general",
-                date: bookAppointment.date,
-                startTime: bookAppointment.startTime,
-                endTime,
-                status: "scheduled",
-                notes: apptNotes,
-              }).returning();
-
-            logger.info({ appt }, "Cita registrada automáticamente por bot");
-            }
-          } else {
-            logger.warn({ bookAppointment }, "No se pudo registrar cita: paciente no encontrado");
-          }
-        } catch (err) {
-          logger.error({ err }, "Error registrando cita desde bot");
-        }
+      if (!aiText?.trim()) {
+        aiText = "Hola, gracias por escribirnos. ¿En qué puedo ayudarte hoy?";
       }
     } catch (err) {
-      logger.error({ err }, "Error procesando respuesta IA");
+      logger.error({ err, conversationId: conv.id }, "Error generando respuesta IA");
+      aiText = "Hola, gracias por contactar a Nexodent. En un momento te damos la información. ¿En qué podemos ayudarte?";
     }
+
+    if (aiText) {
+      await db.insert(messagesTable).values({
+        conversationId: conv.id,
+        content: aiText,
+        sender: "ai",
+        messageType: "text",
+        read: true,
+      });
+
+      await db.update(conversationsTable).set({
+        lastMessage: aiText,
+        lastMessageAt: new Date(),
+      }).where(eq(conversationsTable.id, conv.id));
+
+      const outboundJid = conv.whatsappJid ?? whatsappJid;
+      if (sock && outboundJid) {
+        logger.info({ jid: outboundJid, status: _state.status, wasAudio: parsed.wasAudio }, "Intentando enviar respuesta IA a WhatsApp...");
+        try {
+          if (parsed.wasAudio) {
+            logger.info({ jid: outboundJid }, "Sintetizando audio (TTS) para responder nota de voz");
+            const audioResponse = await synthesizeAudio(aiText);
+            await sock.sendMessage(outboundJid, {
+              audio: audioResponse.buffer,
+              mimetype: audioResponse.mimetype,
+              ptt: true,
+            });
+            logger.info({ jid: outboundJid, mimetype: audioResponse.mimetype }, "Respuesta IA enviada exitosamente como nota de voz");
+          } else {
+            await sock.sendMessage(outboundJid, { text: aiText });
+            logger.info({ jid: outboundJid, aiText }, "Respuesta IA enviada exitosamente como texto");
+          }
+        } catch (wsErr) {
+          logger.error({ wsErr, jid: outboundJid }, "Error al enviar mensaje a través de WhatsApp Socket");
+        }
+      } else {
+        logger.error({ jid: outboundJid, status: _state.status }, "CRÍTICO: No se pudo enviar mensaje (sock o JID inválido)");
+      }
+    }
+  } catch (err) {
+    logger.error({ err }, "Error procesando mensaje entrante");
   }
-} catch (err) {
-  logger.error({ err }, "Error procesando mensaje entrante");
-}
 }
 
 export async function startWhatsApp(): Promise<void> {
   _state.status = "connecting";
+  await syncBotEnabled();
 
-  // Auth state persisted in PostgreSQL — survives server restarts
   const { state: authState, saveCreds } = await usePostgresAuthState();
 
   sock = makeWASocket({
@@ -525,7 +446,6 @@ export async function startWhatsApp(): Promise<void> {
         setTimeout(() => startWhatsApp(), 3000);
       } else {
         logger.info("WhatsApp cerro sesion (loggedOut)");
-        // Clear DB auth so next connect shows QR
         usePostgresAuthState().then(({ clearAuth }) => clearAuth()).catch(() => {});
         _state = { connected: false, phone: null, connectedAt: null, status: "disconnected", qrDataUrl: null, botEnabled: prevBotEnabled };
       }

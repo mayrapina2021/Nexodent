@@ -1,6 +1,9 @@
 import { db, usersTable, aiKnowledgeTable, aiPersonalityTable, appointmentsTable, patientsTable, settingsTable, treatmentsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
+import { ensureTreatmentsCatalog } from "./treatments-catalog";
+import { ensurePaymentsTable } from "./ensure-payments-table";
+import { ensureSchemaColumns } from "./ensure-schema-columns";
 
 const KNOWLEDGE = [
   {
@@ -297,6 +300,10 @@ export async function runStartupSeed(): Promise<void> {
       logger.error({ err }, "Error en sincronización de estados");
     }
 
+
+    await ensurePaymentsTable();
+    await ensureSchemaColumns();
+    await ensureTreatmentsCatalog();
 
     logger.info("Startup seed completado");
   } catch (err) {

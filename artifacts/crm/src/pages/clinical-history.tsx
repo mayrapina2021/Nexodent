@@ -164,7 +164,7 @@ export default function ClinicalHistory() {
       const url = URL.createObjectURL(content);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `RIPS_${patient.name.replace(/\s+/g, "_")}_${dateStr}.zip`;
+      a.download = `RIPS_${(patient?.name ?? "paciente").replace(/\s+/g, "_")}_${dateStr}.zip`;
       a.click();
       
       toast({ title: "RIPS Generado", description: "Se ha descargado el archivo ZIP con los archivos planos (AC, US, CT) en formato legal." });

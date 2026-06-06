@@ -1,6 +1,8 @@
 import { Router, type IRouter } from "express";
 import { db, appointmentsTable, patientsTable, settingsTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
+import { runAppointmentConfirmedAutomations } from "../lib/automations-engine";
+import { addMinutes, APPOINTMENT_SLOT_INTERVAL_MINUTES } from "../lib/appointment-time";
 import {
   CreateAppointmentBody,
   UpdateAppointmentBody,
@@ -69,12 +71,6 @@ async function syncPatientStatus(patientId: number): Promise<void> {
 }
 
 
-function addMinutes(time: string, minutes: number): string {
-  const [h, m] = time.split(":").map(Number);
-  const total = h * 60 + m + minutes;
-  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
-}
-
 router.get("/appointments/available-slots", async (req, res): Promise<void> => {
   // Parse date as string directly (query params are always strings; zod.date() would reject them)
   const dateStr = typeof req.query.date === "string" ? req.query.date : "";
@@ -97,7 +93,7 @@ router.get("/appointments/available-slots", async (req, res): Promise<void> => {
     if (next > endHour) break;
     const conflict = existing.some(a => !(a.endTime <= current || a.startTime >= next));
     slots.push({ startTime: current, endTime: next, available: !conflict });
-    current = next;
+    current = addMinutes(current, APPOINTMENT_SLOT_INTERVAL_MINUTES);
   }
   res.json(slots);
 });
@@ -144,18 +140,30 @@ router.post("/appointments", async (req, res): Promise<void> => {
   const date = rawDate instanceof Date ? rawDate.toISOString().slice(0, 10) : String(rawDate);
   const endTime = addMinutes(startTime, duration ?? 60);
 
-  const conflict = await db.select().from(appointmentsTable)
-    .where(and(eq(appointmentsTable.date, date), sql`${appointmentsTable.status} != 'cancelled'`));
-  const hasConflict = conflict.some(a => !(a.endTime <= startTime || a.startTime >= endTime));
-  if (hasConflict) { res.status(409).json({ error: "Time slot conflict" }); return; }
+  try {
+    const appt = await db.transaction(async (tx) => {
+      const conflict = await tx.select().from(appointmentsTable)
+        .where(and(eq(appointmentsTable.date, date), sql`${appointmentsTable.status} != 'cancelled'`));
+      const hasConflict = conflict.some(a => !(a.endTime <= startTime || a.startTime >= endTime));
+      if (hasConflict) {
+        throw new Error("Time slot conflict");
+      }
+      const [newAppt] = await tx.insert(appointmentsTable).values({ patientId, treatment, date, startTime, endTime, notes }).returning();
+      return newAppt;
+    });
 
-  const [appt] = await db.insert(appointmentsTable).values({ patientId, treatment, date, startTime, endTime, notes }).returning();
-  
-  // Sync patient status based on all their appointments
-  await syncPatientStatus(patientId);
+    // Sync patient status based on all their appointments
+    await syncPatientStatus(patientId);
 
-  const [patient] = await db.select().from(patientsTable).where(eq(patientsTable.id, patientId));
-  res.status(201).json({ ...appt, patientName: patient?.name ?? "", patientPhone: patient?.phone ?? "" });
+    const [patient] = await db.select().from(patientsTable).where(eq(patientsTable.id, patientId));
+    res.status(201).json({ ...appt, patientName: patient?.name ?? "", patientPhone: patient?.phone ?? "" });
+  } catch (err: any) {
+    if (err.message === "Time slot conflict") {
+      res.status(409).json({ error: "Time slot conflict" });
+    } else {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
 });
 
 router.get("/appointments/:id", async (req, res): Promise<void> => {
@@ -187,6 +195,9 @@ router.put("/appointments/:id", async (req, res): Promise<void> => {
   const parsed = UpdateAppointmentBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const [previous] = await db.select().from(appointmentsTable).where(eq(appointmentsTable.id, params.data.id));
+  if (!previous) { res.status(404).json({ error: "Appointment not found" }); return; }
+
   const updateData: Record<string, unknown> = { ...parsed.data };
   if (parsed.data.startTime && parsed.data.duration) {
     updateData.endTime = addMinutes(parsed.data.startTime, parsed.data.duration);
@@ -200,6 +211,25 @@ router.put("/appointments/:id", async (req, res): Promise<void> => {
   await syncPatientStatus(appt.patientId);
   
   const [patient] = await db.select().from(patientsTable).where(eq(patientsTable.id, appt.patientId));
+
+  if (
+    parsed.data.status === "confirmed"
+    && previous.status !== "confirmed"
+    && patient
+  ) {
+    runAppointmentConfirmedAutomations({
+      id: appt.id,
+      date: appt.date,
+      startTime: appt.startTime,
+      endTime: appt.endTime,
+      status: appt.status,
+      patientId: appt.patientId,
+      patientName: patient.name,
+      patientPhone: patient.phone,
+      treatment: appt.treatment,
+    }).catch(() => undefined);
+  }
+
   res.json({ ...appt, patientName: patient?.name ?? "", patientPhone: patient?.phone ?? "" });
 });
 
