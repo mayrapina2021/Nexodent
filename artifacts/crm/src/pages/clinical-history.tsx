@@ -15,13 +15,17 @@ import {
   deleteGalleryItem,
   listConsents,
   createConsent,
+  sendConsentWhatsApp,
+  deleteConsent,
   createSoapNote,
   useUpdatePatient,
+  type ConsentForm,
 } from "@workspace/api-client-react";
 import Layout from "@/components/layout";
 import { Odontogram, ToothData } from "@/components/odontogram";
 import { Periodontogram } from "@/components/periodontogram";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,7 +33,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Plus, Save, History, FileText, ClipboardList, ReceiptText, FileDown, Image, Mic, Stethoscope, ArrowLeft } from "lucide-react";
+import { Plus, Save, History, FileText, ClipboardList, ReceiptText, FileDown, Image, Mic, Stethoscope, ArrowLeft, Eye, Copy, Send, Trash2, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
@@ -46,6 +50,7 @@ export default function ClinicalHistory() {
   const [noteMode, setNoteMode] = useState<"general" | "soap">("general");
   const [soap, setSoap] = useState({ subjective: "", objective: "", assessment: "", plan: "" });
   const [consentType, setConsentType] = useState("general");
+  const [viewConsent, setViewConsent] = useState<ConsentForm | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [galleryCategory, setGalleryCategory] = useState("evolution");
   const [diagnosis, setDiagnosis] = useState("");
@@ -135,13 +140,45 @@ export default function ClinicalHistory() {
   });
 
   const createConsentMutation = useMutation({
-    mutationFn: (sendWhatsApp: boolean) => createConsent({ patientId, type: consentType, sendWhatsApp }),
-    onSuccess: (data: { signUrl?: string }) => {
+    mutationFn: ({ sendWhatsApp }: { sendWhatsApp: boolean }) =>
+      createConsent({ patientId, type: consentType, sendWhatsApp }),
+    onSuccess: (data, { sendWhatsApp }) => {
       queryClient.invalidateQueries({ queryKey: ["consents", patientId] });
-      toast({
-        title: "Consentimiento creado",
-        description: data.signUrl ? "Enlace enviado por WhatsApp" : "Listo para firma",
-      });
+      if (sendWhatsApp && data.whatsappSent) {
+        toast({ title: "Enviado por WhatsApp", description: "El paciente recibió el link para firmar." });
+      } else if (sendWhatsApp) {
+        toast({
+          title: "Creado, pero WhatsApp no envió",
+          description: "Conecte WhatsApp en el menú lateral y use «Enviar WA» en la lista.",
+          variant: "destructive",
+        });
+      } else if (data.signUrl) {
+        navigator.clipboard?.writeText(data.signUrl).catch(() => {});
+        toast({
+          title: "Consentimiento creado",
+          description: "Estado: Pendiente de firma. Link copiado — compártalo o use «Enviar WA».",
+        });
+      }
+    },
+  });
+
+  const sendConsentMutation = useMutation({
+    mutationFn: sendConsentWhatsApp,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["consents", patientId] });
+      toast({ title: "Enviado por WhatsApp" });
+    },
+    onError: () => {
+      toast({ title: "No se pudo enviar", description: "Verifique que WhatsApp esté conectado.", variant: "destructive" });
+    },
+  });
+
+  const deleteConsentMutation = useMutation({
+    mutationFn: deleteConsent,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["consents", patientId] });
+      setViewConsent(null);
+      toast({ title: "Consentimiento eliminado" });
     },
   });
 
@@ -257,6 +294,22 @@ export default function ClinicalHistory() {
   };
 
   if (!patient) return null;
+
+  const CONSENT_TYPE_LABELS: Record<string, string> = {
+    general: "General",
+    extraccion: "Extracción",
+    implante: "Implante",
+    endodoncia: "Endodoncia",
+  };
+
+  const consentStatusLabel = (status: string) =>
+    status === "signed" ? "Firmado" : status === "rejected" ? "Rechazado" : "Pendiente de firma";
+
+  const copySignLink = (url: string | null) => {
+    if (!url) return;
+    navigator.clipboard.writeText(url);
+    toast({ title: "Link copiado", description: "Péguelo en WhatsApp o ábralo en otra pestaña para probar." });
+  };
 
   return (
     <Layout>
@@ -460,7 +513,10 @@ export default function ClinicalHistory() {
             <Card>
               <CardHeader>
                 <CardTitle>Consentimientos Digitales</CardTitle>
-                <CardDescription>Genere y envíe consentimientos para firma vía WhatsApp.</CardDescription>
+                <CardDescription>
+                  <strong>Pendiente</strong> = creado, esperando que el paciente firme en el link.
+                  Use <strong>Ver</strong> para leer el texto, <strong>Copiar link</strong> o <strong>Enviar WA</strong> para compartirlo.
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex gap-2 flex-wrap">
@@ -473,26 +529,110 @@ export default function ClinicalHistory() {
                       <SelectItem value="endodoncia">Endodoncia</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Button onClick={() => createConsentMutation.mutate(false)} variant="outline" className="gap-1">
+                  <Button onClick={() => createConsentMutation.mutate({ sendWhatsApp: false })} variant="outline" className="gap-1">
                     <Plus className="w-4 h-4" /> Crear
                   </Button>
-                  <Button onClick={() => createConsentMutation.mutate(true)} className="gap-1">
-                    <Plus className="w-4 h-4" /> Crear y enviar WA
+                  <Button onClick={() => createConsentMutation.mutate({ sendWhatsApp: true })} className="gap-1">
+                    <Send className="w-4 h-4" /> Crear y enviar WA
                   </Button>
                 </div>
-                <div className="space-y-2">
-                  {(consents as { id: number; type: string; status: string; createdAt: string; signUrl?: string }[]).map((c) => (
-                    <div key={c.id} className="flex justify-between items-center p-3 border rounded-lg">
-                      <div>
-                        <div className="font-medium text-sm capitalize">{c.type}</div>
-                        <div className="text-xs text-muted-foreground">{format(new Date(c.createdAt), "dd/MM/yyyy")}</div>
+
+                {consents.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-6">No hay consentimientos. Cree uno arriba.</p>
+                )}
+
+                <div className="space-y-3">
+                  {(consents as ConsentForm[]).map((c) => (
+                    <div key={c.id} className="p-4 border rounded-lg space-y-3">
+                      <div className="flex justify-between items-start gap-2 flex-wrap">
+                        <div>
+                          <div className="font-medium text-sm">{CONSENT_TYPE_LABELS[c.type] ?? c.type}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {format(new Date(c.createdAt), "dd/MM/yyyy HH:mm", { locale: es })}
+                            {c.signedAt && ` · Firmado ${format(new Date(c.signedAt), "dd/MM/yyyy")}`}
+                          </div>
+                        </div>
+                        <Badge variant={c.status === "signed" ? "default" : "secondary"}>
+                          {consentStatusLabel(c.status)}
+                        </Badge>
                       </div>
-                      <Badge variant={c.status === "signed" ? "default" : "secondary"}>{c.status}</Badge>
+                      <p className="text-xs text-muted-foreground line-clamp-2">{c.content}</p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" variant="outline" className="gap-1 h-8" onClick={() => setViewConsent(c)}>
+                          <Eye className="w-3 h-3" /> Ver
+                        </Button>
+                        {c.status === "pending" && c.signUrl && (
+                          <>
+                            <Button size="sm" variant="outline" className="gap-1 h-8" onClick={() => copySignLink(c.signUrl)}>
+                              <Copy className="w-3 h-3" /> Copiar link
+                            </Button>
+                            <Button size="sm" variant="outline" className="gap-1 h-8" onClick={() => window.open(c.signUrl!, "_blank")}>
+                              <ExternalLink className="w-3 h-3" /> Abrir firma
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="gap-1 h-8"
+                              onClick={() => sendConsentMutation.mutate(c.id)}
+                              disabled={sendConsentMutation.isPending}
+                            >
+                              <Send className="w-3 h-3" /> Enviar WA
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="gap-1 h-8 text-destructive"
+                              onClick={() => {
+                                if (confirm("¿Eliminar este consentimiento pendiente?")) {
+                                  deleteConsentMutation.mutate(c.id);
+                                }
+                              }}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
               </CardContent>
             </Card>
+
+            <Dialog open={!!viewConsent} onOpenChange={(o) => !o && setViewConsent(null)}>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>
+                    Consentimiento — {viewConsent ? (CONSENT_TYPE_LABELS[viewConsent.type] ?? viewConsent.type) : ""}
+                  </DialogTitle>
+                </DialogHeader>
+                {viewConsent && (
+                  <div className="space-y-4">
+                    <Badge variant={viewConsent.status === "signed" ? "default" : "secondary"}>
+                      {consentStatusLabel(viewConsent.status)}
+                    </Badge>
+                    <div className="bg-muted/50 rounded-lg p-4 text-sm leading-relaxed whitespace-pre-wrap">
+                      {viewConsent.content}
+                    </div>
+                    {viewConsent.status === "signed" && viewConsent.signatureData && (
+                      <div>
+                        <p className="text-xs font-medium mb-2">Firma del paciente:</p>
+                        <img src={viewConsent.signatureData} alt="Firma" className="border rounded bg-white max-h-32" />
+                      </div>
+                    )}
+                    {viewConsent.status === "pending" && viewConsent.signUrl && (
+                      <div className="flex gap-2 flex-wrap">
+                        <Button size="sm" variant="outline" onClick={() => copySignLink(viewConsent.signUrl)}>
+                          <Copy className="w-3 h-3 mr-1" /> Copiar link de firma
+                        </Button>
+                        <Button size="sm" onClick={() => sendConsentMutation.mutate(viewConsent.id)}>
+                          <Send className="w-3 h-3 mr-1" /> Enviar por WhatsApp
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
           </TabsContent>
         </Tabs>
       </div>

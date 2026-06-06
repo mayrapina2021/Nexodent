@@ -81,20 +81,54 @@ router.put("/clinical/odontogram/:patientId", async (req, res): Promise<void> =>
 });
 
 // Consentimientos
-router.get("/clinical/consent/:patientId", async (req, res): Promise<void> => {
-  const patientId = parseInt(req.params.patientId, 10);
-  const forms = await db.select().from(consentFormsTable)
-    .where(eq(consentFormsTable.patientId, patientId))
-    .orderBy(desc(consentFormsTable.createdAt));
-  res.json(forms);
-});
-
 const CONSENT_TEXT: Record<string, string> = {
   general: "Autorizo el tratamiento odontológico indicado, habiendo recibido información sobre riesgos y beneficios.",
   extraccion: "Autorizo la extracción dental, comprendiendo los riesgos del procedimiento.",
   implante: "Autorizo la colocación de implante dental con la información recibida.",
   endodoncia: "Autorizo el tratamiento de endodoncia indicado.",
 };
+
+function getCrmBaseUrl(): string {
+  return process.env.CRM_URL ?? "https://nexodentbot.web.app";
+}
+
+function consentSignUrl(portalToken: string | null): string | null {
+  return portalToken ? `${getCrmBaseUrl()}/portal/consent/${portalToken}` : null;
+}
+
+async function sendConsentWhatsApp(formId: number): Promise<{ sent: boolean; signUrl?: string; error?: string }> {
+  const [form] = await db.select().from(consentFormsTable).where(eq(consentFormsTable.id, formId));
+  if (!form) return { sent: false, error: "Consentimiento no encontrado" };
+  if (form.status === "signed") return { sent: false, error: "Ya está firmado" };
+  if (!form.portalToken) return { sent: false, error: "Sin enlace de firma" };
+
+  const [patient] = await db.select().from(patientsTable).where(eq(patientsTable.id, form.patientId));
+  const [settings] = await db.select().from(settingsTable).limit(1);
+  const sock = getWhatsAppSock();
+  if (!sock) return { sent: false, error: "WhatsApp no conectado. Conecte en menú WhatsApp." };
+  if (!patient) return { sent: false, error: "Paciente no encontrado" };
+
+  const link = consentSignUrl(form.portalToken)!;
+  const clinicName = settings?.clinicName ?? "Nexodent";
+  const typeLabel = form.type.charAt(0).toUpperCase() + form.type.slice(1);
+  await sock.sendMessage(phoneToJid(patient.phone), {
+    text: `*${clinicName}*\n\nEstimado(a) *${patient.name}*, le enviamos su consentimiento informado (${typeLabel}) para firma digital:\n\n${link}\n\nEl enlace es válido por 7 días.`,
+  });
+
+  return { sent: true, signUrl: link };
+}
+
+router.get("/clinical/consent/:patientId", async (req, res): Promise<void> => {
+  const patientId = parseInt(req.params.patientId, 10);
+  const forms = await db.select().from(consentFormsTable)
+    .where(eq(consentFormsTable.patientId, patientId))
+    .orderBy(desc(consentFormsTable.createdAt));
+
+  res.json(forms.map((f) => ({
+    ...f,
+    signUrl: consentSignUrl(f.portalToken),
+  })));
+});
 
 router.post("/clinical/consent", async (req, res): Promise<void> => {
   const { patientId, type, sendWhatsApp } = req.body;
@@ -107,27 +141,39 @@ router.post("/clinical/consent", async (req, res): Promise<void> => {
 
   await savePortalToken(token, patientId, "consent", form.id);
 
+  let whatsappSent = false;
   if (sendWhatsApp) {
-    try {
-      const [patient] = await db.select().from(patientsTable).where(eq(patientsTable.id, patientId));
-      const [settings] = await db.select().from(settingsTable).limit(1);
-      const sock = getWhatsAppSock();
-      if (patient && sock) {
-        const baseUrl = process.env.CRM_URL ?? "https://nexodentbot.web.app";
-        const link = `${baseUrl}/portal/consent/${token}`;
-        const clinicName = settings?.clinicName ?? "Nexodent";
-        const jid = phoneToJid(patient.phone);
-        await sock.sendMessage(jid, {
-          text: `*${clinicName}*\n\nEstimado(a) *${patient.name}*, le enviamos su consentimiento informado para firma digital:\n\n${link}\n\nEl enlace es válido por 7 días.`,
-        });
-      }
-    } catch (err) {
-      logger.error({ err }, "Error enviando consentimiento por WhatsApp");
+    const result = await sendConsentWhatsApp(form.id);
+    whatsappSent = result.sent;
+    if (!result.sent && result.error) {
+      logger.warn({ formId: form.id, error: result.error }, "No se pudo enviar consentimiento por WhatsApp al crear");
     }
   }
 
-  const baseUrl = process.env.CRM_URL ?? "https://nexodentbot.web.app";
-  res.status(201).json({ ...form, signUrl: `${baseUrl}/portal/consent/${token}` });
+  res.status(201).json({
+    ...form,
+    signUrl: consentSignUrl(token),
+    whatsappSent,
+  });
+});
+
+router.post("/clinical/consent/:id/send-whatsapp", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  const result = await sendConsentWhatsApp(id);
+  if (!result.sent) {
+    res.status(result.error?.includes("no conectado") ? 503 : 400).json({ error: result.error });
+    return;
+  }
+  res.json({ sent: true, signUrl: result.signUrl });
+});
+
+router.delete("/clinical/consent/:id", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  const [form] = await db.select().from(consentFormsTable).where(eq(consentFormsTable.id, id));
+  if (!form) { res.status(404).json({ error: "No encontrado" }); return; }
+  if (form.status === "signed") { res.status(400).json({ error: "No se puede eliminar un consentimiento firmado" }); return; }
+  await db.delete(consentFormsTable).where(eq(consentFormsTable.id, id));
+  res.status(204).send();
 });
 
 // Periodontograma

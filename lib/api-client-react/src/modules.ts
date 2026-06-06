@@ -104,9 +104,26 @@ export const updatePeriodontogram = (patientId: number, data: Record<string, Per
   customFetch(`/api/clinical/periodontogram/${patientId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data }) });
 
 // Consent
-export const listConsents = (patientId: number) => customFetch(`/api/clinical/consent/${patientId}`);
+export interface ConsentForm {
+  id: number;
+  patientId: number;
+  type: string;
+  content: string | null;
+  status: string;
+  signatureData: string | null;
+  portalToken: string | null;
+  signUrl: string | null;
+  signedAt: string | null;
+  createdAt: string;
+}
+
+export const listConsents = (patientId: number) => customFetch<ConsentForm[]>(`/api/clinical/consent/${patientId}`);
 export const createConsent = (data: { patientId: number; type: string; sendWhatsApp?: boolean }) =>
-  customFetch("/api/clinical/consent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+  customFetch<ConsentForm & { whatsappSent?: boolean }>("/api/clinical/consent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+export const sendConsentWhatsApp = (id: number) =>
+  customFetch<{ sent: boolean; signUrl: string }>(`/api/clinical/consent/${id}/send-whatsapp`, { method: "POST" });
+export const deleteConsent = (id: number) =>
+  customFetch(`/api/clinical/consent/${id}`, { method: "DELETE" });
 
 // Portal (public)
 export const getPortalSlots = (date: string) => customFetch<{ date: string; slots: string[] }>(`/api/portal/available-slots?date=${date}`);
