@@ -96,11 +96,21 @@ function consentSignUrl(portalToken: string | null): string | null {
   return portalToken ? `${getCrmBaseUrl()}/portal/consent/${portalToken}` : null;
 }
 
+async function ensureConsentPortalToken(form: typeof consentFormsTable.$inferSelect): Promise<string> {
+  if (form.portalToken) return form.portalToken;
+  const token = randomBytes(32).toString("hex");
+  await db.update(consentFormsTable).set({ portalToken: token }).where(eq(consentFormsTable.id, form.id));
+  await savePortalToken(token, form.patientId, "consent", form.id);
+  return token;
+}
+
 async function sendConsentWhatsApp(formId: number): Promise<{ sent: boolean; signUrl?: string; error?: string }> {
   const [form] = await db.select().from(consentFormsTable).where(eq(consentFormsTable.id, formId));
   if (!form) return { sent: false, error: "Consentimiento no encontrado" };
   if (form.status === "signed") return { sent: false, error: "Ya está firmado" };
-  if (!form.portalToken) return { sent: false, error: "Sin enlace de firma" };
+
+  const token = await ensureConsentPortalToken(form);
+  const link = consentSignUrl(token)!;
 
   const [patient] = await db.select().from(patientsTable).where(eq(patientsTable.id, form.patientId));
   const [settings] = await db.select().from(settingsTable).limit(1);
@@ -108,7 +118,6 @@ async function sendConsentWhatsApp(formId: number): Promise<{ sent: boolean; sig
   if (!sock) return { sent: false, error: "WhatsApp no conectado. Conecte en menú WhatsApp." };
   if (!patient) return { sent: false, error: "Paciente no encontrado" };
 
-  const link = consentSignUrl(form.portalToken)!;
   const clinicName = settings?.clinicName ?? "Nexodent";
   const typeLabel = form.type.charAt(0).toUpperCase() + form.type.slice(1);
   await sock.sendMessage(phoneToJid(patient.phone), {
@@ -124,9 +133,9 @@ router.get("/clinical/consent/:patientId", async (req, res): Promise<void> => {
     .where(eq(consentFormsTable.patientId, patientId))
     .orderBy(desc(consentFormsTable.createdAt));
 
-  res.json(forms.map((f) => ({
-    ...f,
-    signUrl: consentSignUrl(f.portalToken),
+  res.json(await Promise.all(forms.map(async (f) => {
+    const token = f.portalToken ?? (f.status === "pending" ? await ensureConsentPortalToken(f) : null);
+    return { ...f, portalToken: token, signUrl: consentSignUrl(token) };
   })));
 });
 
@@ -165,6 +174,26 @@ router.post("/clinical/consent/:id/send-whatsapp", async (req, res): Promise<voi
     return;
   }
   res.json({ sent: true, signUrl: result.signUrl });
+});
+
+router.post("/clinical/consent/:id/sign", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  const signatureData = typeof req.body?.signatureData === "string" ? req.body.signatureData : "";
+  if (signatureData.length < 10) {
+    res.status(400).json({ error: "Firma requerida" });
+    return;
+  }
+
+  const [form] = await db.select().from(consentFormsTable).where(eq(consentFormsTable.id, id));
+  if (!form) { res.status(404).json({ error: "No encontrado" }); return; }
+  if (form.status === "signed") { res.status(400).json({ error: "Ya está firmado" }); return; }
+
+  const [updated] = await db.update(consentFormsTable)
+    .set({ status: "signed", signatureData, signedAt: new Date() })
+    .where(eq(consentFormsTable.id, id))
+    .returning();
+
+  res.json({ ...updated, signUrl: consentSignUrl(updated.portalToken) });
 });
 
 router.delete("/clinical/consent/:id", async (req, res): Promise<void> => {

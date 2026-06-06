@@ -16,6 +16,7 @@ import {
   listConsents,
   createConsent,
   sendConsentWhatsApp,
+  signConsentInClinic,
   deleteConsent,
   createSoapNote,
   useUpdatePatient,
@@ -24,6 +25,7 @@ import {
 import Layout from "@/components/layout";
 import { Odontogram, ToothData } from "@/components/odontogram";
 import { Periodontogram } from "@/components/periodontogram";
+import { SignaturePad } from "@/components/signature-pad";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -33,7 +35,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Plus, Save, History, FileText, ClipboardList, ReceiptText, FileDown, Image, Mic, Stethoscope, ArrowLeft, Eye, Copy, Send, Trash2, ExternalLink } from "lucide-react";
+import { Plus, Save, History, FileText, ClipboardList, ReceiptText, FileDown, Image, Mic, Stethoscope, ArrowLeft, Eye, Copy, Send, Trash2, PenLine } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
@@ -51,6 +53,7 @@ export default function ClinicalHistory() {
   const [soap, setSoap] = useState({ subjective: "", objective: "", assessment: "", plan: "" });
   const [consentType, setConsentType] = useState("general");
   const [viewConsent, setViewConsent] = useState<ConsentForm | null>(null);
+  const [signConsent, setSignConsent] = useState<ConsentForm | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [galleryCategory, setGalleryCategory] = useState("evolution");
   const [diagnosis, setDiagnosis] = useState("");
@@ -178,7 +181,22 @@ export default function ClinicalHistory() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["consents", patientId] });
       setViewConsent(null);
+      setSignConsent(null);
       toast({ title: "Consentimiento eliminado" });
+    },
+  });
+
+  const signInClinicMutation = useMutation({
+    mutationFn: ({ id, signatureData }: { id: number; signatureData: string }) =>
+      signConsentInClinic(id, signatureData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["consents", patientId] });
+      setSignConsent(null);
+      setViewConsent(null);
+      toast({ title: "Consentimiento firmado", description: "Firma registrada correctamente." });
+    },
+    onError: () => {
+      toast({ title: "Error al firmar", variant: "destructive" });
     },
   });
 
@@ -514,8 +532,8 @@ export default function ClinicalHistory() {
               <CardHeader>
                 <CardTitle>Consentimientos Digitales</CardTitle>
                 <CardDescription>
-                  <strong>Pendiente</strong> = creado, esperando que el paciente firme en el link.
-                  Use <strong>Ver</strong> para leer el texto, <strong>Copiar link</strong> o <strong>Enviar WA</strong> para compartirlo.
+                  Si el paciente está en consultorio, use <strong>Firmar aquí</strong> en este mismo dispositivo.
+                  Si está remoto, use <strong>Enviar WA</strong> o <strong>Copiar link</strong>.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -561,16 +579,23 @@ export default function ClinicalHistory() {
                         <Button size="sm" variant="outline" className="gap-1 h-8" onClick={() => setViewConsent(c)}>
                           <Eye className="w-3 h-3" /> Ver
                         </Button>
-                        {c.status === "pending" && c.signUrl && (
+                        {c.status === "pending" && (
                           <>
-                            <Button size="sm" variant="outline" className="gap-1 h-8" onClick={() => copySignLink(c.signUrl)}>
-                              <Copy className="w-3 h-3" /> Copiar link
-                            </Button>
-                            <Button size="sm" variant="outline" className="gap-1 h-8" onClick={() => window.open(c.signUrl!, "_blank")}>
-                              <ExternalLink className="w-3 h-3" /> Abrir firma
+                            <Button size="sm" className="gap-1 h-8" onClick={() => setSignConsent(c)}>
+                              <PenLine className="w-3 h-3" /> Firmar aquí
                             </Button>
                             <Button
                               size="sm"
+                              variant="outline"
+                              className="gap-1 h-8"
+                              onClick={() => copySignLink(c.signUrl)}
+                              disabled={!c.signUrl}
+                            >
+                              <Copy className="w-3 h-3" /> Copiar link
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
                               className="gap-1 h-8"
                               onClick={() => sendConsentMutation.mutate(c.id)}
                               disabled={sendConsentMutation.isPending}
@@ -619,16 +644,41 @@ export default function ClinicalHistory() {
                         <img src={viewConsent.signatureData} alt="Firma" className="border rounded bg-white max-h-32" />
                       </div>
                     )}
-                    {viewConsent.status === "pending" && viewConsent.signUrl && (
+                    {viewConsent.status === "pending" && (
                       <div className="flex gap-2 flex-wrap">
-                        <Button size="sm" variant="outline" onClick={() => copySignLink(viewConsent.signUrl)}>
-                          <Copy className="w-3 h-3 mr-1" /> Copiar link de firma
+                        <Button size="sm" className="gap-1" onClick={() => { setSignConsent(viewConsent); setViewConsent(null); }}>
+                          <PenLine className="w-3 h-3" /> Firmar aquí
                         </Button>
-                        <Button size="sm" onClick={() => sendConsentMutation.mutate(viewConsent.id)}>
-                          <Send className="w-3 h-3 mr-1" /> Enviar por WhatsApp
+                        <Button size="sm" variant="outline" onClick={() => copySignLink(viewConsent.signUrl)}>
+                          <Copy className="w-3 h-3 mr-1" /> Copiar link
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => sendConsentMutation.mutate(viewConsent.id)}>
+                          <Send className="w-3 h-3 mr-1" /> Enviar WA
                         </Button>
                       </div>
                     )}
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={!!signConsent} onOpenChange={(o) => !o && setSignConsent(null)}>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>
+                    Firma en consultorio — {signConsent ? (CONSENT_TYPE_LABELS[signConsent.type] ?? signConsent.type) : ""}
+                  </DialogTitle>
+                </DialogHeader>
+                {signConsent && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Entregue el dispositivo al paciente <strong>{patient.name}</strong> para que firme con el dedo o el mouse.
+                    </p>
+                    <div className="bg-muted/50 rounded-lg p-3 text-sm max-h-32 overflow-y-auto">{signConsent.content}</div>
+                    <SignaturePad
+                      onSave={(sig) => signInClinicMutation.mutate({ id: signConsent.id, signatureData: sig })}
+                      disabled={signInClinicMutation.isPending}
+                    />
                   </div>
                 )}
               </DialogContent>

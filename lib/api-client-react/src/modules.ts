@@ -122,6 +122,12 @@ export const createConsent = (data: { patientId: number; type: string; sendWhats
   customFetch<ConsentForm & { whatsappSent?: boolean }>("/api/clinical/consent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
 export const sendConsentWhatsApp = (id: number) =>
   customFetch<{ sent: boolean; signUrl: string }>(`/api/clinical/consent/${id}/send-whatsapp`, { method: "POST" });
+export const signConsentInClinic = (id: number, signatureData: string) =>
+  customFetch<ConsentForm>(`/api/clinical/consent/${id}/sign`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ signatureData }),
+  });
 export const deleteConsent = (id: number) =>
   customFetch(`/api/clinical/consent/${id}`, { method: "DELETE" });
 
