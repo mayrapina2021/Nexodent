@@ -3334,6 +3334,7 @@ export function useListEvolutionNotes<TData = Awaited<ReturnType<typeof listEvol
   const queryOptions = {
     queryKey: getListEvolutionNotesQueryKey(params),
     queryFn: () => listEvolutionNotes(params, options?.request),
+    enabled: !!params.patientId,
     ...options?.query
   };
   return useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };

@@ -13,6 +13,7 @@ import {
 const router: IRouter = Router();
 
 router.get("/patients", async (req, res): Promise<void> => {
+  try {
   const query = ListPatientsQueryParams.safeParse(req.query);
   const conditions = [];
 
@@ -67,6 +68,10 @@ router.get("/patients", async (req, res): Promise<void> => {
   }
 
   res.json(patients.map(p => ({ ...p, nextAppointment: nextApptMap.get(p.id) ?? null })));
+  } catch (err) {
+    console.error("GET /patients error:", err);
+    res.status(500).json({ error: "Error loading patients" });
+  }
 });
 
 router.post("/patients", async (req, res): Promise<void> => {

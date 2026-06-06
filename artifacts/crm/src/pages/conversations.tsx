@@ -42,7 +42,8 @@ const senderLabel: Record<string, string> = {
   ai: "IA",
 };
 
-function messageMediaUrl(messageId: number): string {
+function messageMediaUrl(messageId: number): string | null {
+  if (!messageId || messageId <= 0) return null;
   return `${API_BASE}/api/messages/media/${messageId}`;
 }
 
@@ -50,7 +51,8 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
   const isPatient = msg.sender === "patient";
   const isAi = msg.sender === "ai";
   const type = msg.messageType ?? "text";
-  const showMedia = msg.hasMedia && msg.id > 0;
+  const mediaUrl = messageMediaUrl(msg.id);
+  const showMedia = msg.hasMedia && !!mediaUrl;
 
   return (
     <div className={cn("flex", isPatient ? "justify-start" : "justify-end")}>
@@ -78,9 +80,9 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
         )}
 
         {showMedia && (type === "image" || type === "sticker") && (
-          <a href={messageMediaUrl(msg.id)} target="_blank" rel="noopener noreferrer" className="block">
+          <a href={mediaUrl!} target="_blank" rel="noopener noreferrer" className="block">
             <img
-              src={messageMediaUrl(msg.id)}
+              src={mediaUrl!}
               alt={msg.content}
               className="rounded-lg max-h-64 w-full object-cover border border-border/30"
               loading="lazy"
@@ -90,7 +92,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
 
         {showMedia && type === "video" && (
           <video
-            src={messageMediaUrl(msg.id)}
+            src={mediaUrl!}
             controls
             className="rounded-lg max-h-64 w-full border border-border/30"
             preload="metadata"
@@ -103,13 +105,13 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
               <Mic className="h-3 w-3" />
               <span>Nota de voz</span>
             </div>
-            <audio src={messageMediaUrl(msg.id)} controls className="w-full max-w-full" preload="metadata" />
+            <audio src={mediaUrl!} controls className="w-full max-w-full" preload="metadata" />
           </div>
         )}
 
         {showMedia && type === "document" && (
           <a
-            href={messageMediaUrl(msg.id)}
+            href={mediaUrl!}
             target="_blank"
             rel="noopener noreferrer"
             className={cn(

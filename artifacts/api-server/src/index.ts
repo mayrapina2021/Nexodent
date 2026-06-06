@@ -4,6 +4,7 @@ import { startWhatsApp, getWAState } from "./lib/whatsapp";
 import { runStartupSeed } from "./lib/startup-seed";
 import { startAutomationsEngine } from "./lib/automations-engine";
 import { syncAllConversationsWithPatients } from "./lib/conversation-patient-sync";
+import { ensureDatabase } from "./lib/ensure-database";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegStatic from "ffmpeg-static";
 import fs from "fs";
@@ -26,28 +27,42 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
+async function bootstrap(): Promise<void> {
+  try {
+    await ensureDatabase();
+  } catch (err) {
+    logger.error({ err }, "Error crítico verificando base de datos");
     process.exit(1);
   }
 
-  logger.info({ port }, "Server listening");
+  app.listen(port, (err) => {
+    if (err) {
+      logger.error({ err }, "Error listening on port");
+      process.exit(1);
+    }
 
-  runStartupSeed().catch((err) => {
-    logger.error({ err }, "Error en startup seed");
-  });
+    logger.info({ port }, "Server listening");
 
-  setTimeout(() => {
-    const wa = getWAState();
-    syncAllConversationsWithPatients(wa.phone).catch((err) => {
-      logger.error({ err }, "Error sincronizando conversaciones con pacientes");
+    runStartupSeed().catch((err) => {
+      logger.error({ err }, "Error en startup seed");
     });
-  }, 15000);
 
-  startWhatsApp().catch((err) => {
-    logger.error({ err }, "Error iniciando WhatsApp");
+    setTimeout(() => {
+      const wa = getWAState();
+      syncAllConversationsWithPatients(wa.phone).catch((err) => {
+        logger.error({ err }, "Error sincronizando conversaciones con pacientes");
+      });
+    }, 15000);
+
+    startWhatsApp().catch((err) => {
+      logger.error({ err }, "Error iniciando WhatsApp");
+    });
+
+    startAutomationsEngine();
   });
+}
 
-  startAutomationsEngine();
+bootstrap().catch((err) => {
+  logger.error({ err }, "Error en bootstrap");
+  process.exit(1);
 });
