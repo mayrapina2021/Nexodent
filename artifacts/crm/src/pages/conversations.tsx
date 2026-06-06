@@ -10,9 +10,9 @@ import {
   getGetMessagesQueryKey,
 } from "@workspace/api-client-react";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 
-import { Search, Send, Bot, User, Phone, Trash2, ImageIcon, Mic, Video, FileText, Sticker } from "lucide-react";
+import { Search, Send, Bot, User, Phone, Trash2, ImageIcon, Mic, Video, FileText, Sticker, WifiOff, Wifi } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatMessageDateTime } from "@/lib/datetime";
 import { ChatMedia, mediaTypeLabel, previewFromMessage } from "@/components/chat-media";
+import { customFetch } from "@workspace/api-client-react";
 
 type ChatMessage = {
   id: number;
@@ -177,6 +178,12 @@ export default function Conversations() {
     }
   }, [conversations, detail]);
 
+  const { data: waStatus } = useQuery({
+    queryKey: ["wa-status-chat"],
+    queryFn: () => customFetch<{ connected: boolean; status: string; phone: string | null }>("/api/whatsapp/status"),
+    refetchInterval: 5000,
+  });
+
   const sendMessage = useSendMessage();
   const setMode = useSetConversationMode();
   const deleteConversation = useDeleteConversation();
@@ -277,6 +284,18 @@ export default function Conversations() {
 
   return (
     <Layout>
+      {waStatus && !waStatus.connected && (
+        <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-200">
+          <WifiOff className="h-4 w-4 shrink-0" />
+          WhatsApp desconectado ({waStatus.status}). Los mensajes no llegarán al chat hasta reconectar en la sección WhatsApp.
+        </div>
+      )}
+      {waStatus?.connected && (
+        <div className="mb-3 flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/5 px-4 py-2 text-xs text-muted-foreground">
+          <Wifi className="h-3.5 w-3.5 text-green-500" />
+          WhatsApp conectado {waStatus.phone ? `(${waStatus.phone})` : ""} — los mensajes entrantes se procesan en tiempo real.
+        </div>
+      )}
       <div className="h-[calc(100vh-8rem)] flex gap-0 rounded-xl overflow-hidden border border-border/50">
         <div className="w-80 flex-shrink-0 bg-card/80 border-r border-border/50 flex flex-col">
           <div className="p-4 border-b border-border/50">

@@ -10,23 +10,23 @@ export function parseIncomingContact(msg: proto.IWebMessageInfo): {
     return null;
   }
 
-  const key = msg.key as { remoteJidAlt?: string } | undefined;
-  const altJid = key?.remoteJidAlt;
-  const phoneFromAlt = altJid ? jidToDisplayPhone(altJid) : null;
-  const phoneFromMain = jidToDisplayPhone(remoteJid);
+  const phone = phoneFromMessageKey(msg.key);
+  if (phone) {
+    return { whatsappJid: remoteJid, phone };
+  }
 
   const userPart = remoteJid.split("@")[0].split(":")[0];
-  const phone = phoneFromAlt ?? phoneFromMain ?? `+${userPart.replace(/\D/g, "")}`;
-
-  return { whatsappJid: remoteJid, phone };
+  const fallback = `+${userPart.replace(/\D/g, "")}`;
+  return { whatsappJid: remoteJid, phone: fallback };
 }
 
 /** Convierte un JID @s.whatsapp.net a teléfono legible (+57...). */
 export function jidToDisplayPhone(jid: string): string | null {
   if (!jid || jid.includes("@g.us")) return null;
-  if (!jid.endsWith("@s.whatsapp.net")) return null;
+  const normalized = jid.includes("@") ? jid : `${jid}@s.whatsapp.net`;
+  if (!normalized.endsWith("@s.whatsapp.net")) return null;
 
-  const user = jid.split("@")[0].split(":")[0];
+  const user = normalized.split("@")[0].split(":")[0];
   const clean = user.replace(/\D/g, "");
   if (!clean) return null;
 
@@ -34,6 +34,27 @@ export function jidToDisplayPhone(jid: string): string | null {
   if (clean.length === 10 && clean.startsWith("3")) return `+57${clean}`;
   if (clean.length >= 10 && clean.length <= 13) return `+${clean}`;
 
+  return null;
+}
+
+/** Teléfono legible desde clave de mensaje (soporta LID + remoteJidAlt de Baileys 7). */
+export function phoneFromMessageKey(key: proto.IMessageKey | null | undefined): string | null {
+  if (!key) return null;
+  const extended = key as proto.IMessageKey & {
+    remoteJidAlt?: string;
+    participantAlt?: string;
+  };
+  const candidates = [
+    extended.remoteJidAlt,
+    extended.participantAlt,
+    key.participant,
+    key.remoteJid,
+  ].filter(Boolean) as string[];
+
+  for (const jid of candidates) {
+    const phone = jidToDisplayPhone(jid);
+    if (phone) return phone;
+  }
   return null;
 }
 

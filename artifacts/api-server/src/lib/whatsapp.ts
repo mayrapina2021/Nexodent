@@ -28,7 +28,33 @@ export interface WAState {
   botEnabled: boolean;
 }
 
+const APPEND_MAX_AGE_SEC = 300;
+
+function isRecentWhatsAppMessage(msg: proto.IWebMessageInfo): boolean {
+  const ts = Number(msg.messageTimestamp ?? 0);
+  if (!ts) return true;
+  const ageSec = Date.now() / 1000 - ts;
+  return ageSec >= 0 && ageSec <= APPEND_MAX_AGE_SEC;
+}
+
+const _messageStore = new Map<string, proto.IMessage>();
+
+function messageStoreKey(key: proto.IMessageKey | null | undefined): string | null {
+  if (!key?.remoteJid || !key.id) return null;
+  return `${key.remoteJid}:${key.id}`;
+}
+
+function cacheMessage(msg: proto.IWebMessageInfo): void {
+  const k = messageStoreKey(msg.key);
+  if (!k || !msg.message) return;
+  _messageStore.set(k, msg.message);
+  if (_messageStore.size > 800) {
+    const first = _messageStore.keys().next().value;
+    if (first) _messageStore.delete(first);
+  }
+}
 const _processedMsgIds = new Set<string>();
+
 function isAlreadyProcessed(msgId: string): boolean {
   if (_processedMsgIds.has(msgId)) return true;
   _processedMsgIds.add(msgId);
@@ -225,8 +251,10 @@ async function resolveOrCreateConversation(
   };
 }
 
-async function handleIncomingMessage(msg: proto.IWebMessageInfo): Promise<void> {
+async function handleIncomingMessage(msg: proto.IWebMessageInfo, source: "notify" | "append" = "notify"): Promise<void> {
   if (!msg.key) return;
+
+  cacheMessage(msg);
 
   const jid = msg.key.remoteJid ?? "";
   if (!jid || jid.includes("@g.us") || jid === "status@broadcast") return;
@@ -235,16 +263,21 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo): Promise<void> 
   const msgId = msg.key.id ?? "";
 
   if (msgId && isAlreadyProcessed(msgId)) {
-    logger.info({ msgId }, "Mensaje ya procesado, ignorando duplicado");
+    logger.info({ msgId, source }, "Mensaje ya procesado, ignorando duplicado");
     return;
   }
 
   if (msgId) {
     const existing = await findMessageByWhatsappId(msgId);
     if (existing) {
-      logger.info({ msgId }, "Mensaje WhatsApp ya en base de datos");
+      logger.info({ msgId, source }, "Mensaje WhatsApp ya en base de datos");
       return;
     }
+  }
+
+  if (source === "append" && !isRecentWhatsAppMessage(msg)) {
+    logger.info({ msgId, jid: msg.key?.remoteJid }, "Mensaje append antiguo ignorado (historial)");
+    return;
   }
 
   const contact = parseIncomingContact(msg);
@@ -423,6 +456,11 @@ export async function startWhatsApp(): Promise<void> {
     maxMsgRetryCount: 3,
     syncFullHistory: false,
     markOnlineOnConnect: false,
+    receivedPendingNotifications: true,
+    getMessage: async (key) => {
+      const k = messageStoreKey(key);
+      return k ? _messageStore.get(k) : undefined;
+    },
   });
 
   sock.ev.on("creds.update", saveCreds);
@@ -476,9 +514,13 @@ export async function startWhatsApp(): Promise<void> {
   });
 
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
-    if (type !== "notify") return;
+    if (type !== "notify" && type !== "append") return;
     for (const msg of messages) {
-      await handleIncomingMessage(msg);
+      try {
+        await handleIncomingMessage(msg, type);
+      } catch (err) {
+        logger.error({ err, type, msgId: msg.key?.id }, "Error en messages.upsert");
+      }
     }
   });
 }
