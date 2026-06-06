@@ -1,5 +1,5 @@
-/** Letras unicode (incluye acentos). */
-const LETTER_RE = /\p{L}/u;
+/** Letras unicode (incluye acentos). matchAll exige flag global. */
+const LETTER_RE = /\p{L}/gu;
 
 /** Nombres genéricos que no deben usarse como nombre real del paciente. */
 const GENERIC_NAMES = new Set([
