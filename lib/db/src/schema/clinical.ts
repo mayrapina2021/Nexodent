@@ -15,6 +15,11 @@ export const evolutionNotesTable = pgTable("evolution_notes", {
   id: serial("id").primaryKey(),
   patientId: integer("patient_id").notNull().references(() => patientsTable.id, { onDelete: "cascade" }),
   content: text("content").notNull(),
+  noteType: text("note_type").notNull().default("general"),
+  subjective: text("subjective"),
+  objective: text("objective"),
+  assessment: text("assessment"),
+  plan: text("plan"),
   doctorName: text("doctor_name"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -29,9 +34,12 @@ export const odontogramsTable = pgTable("odontograms", {
 export const consentFormsTable = pgTable("consent_forms", {
   id: serial("id").primaryKey(),
   patientId: integer("patient_id").notNull().references(() => patientsTable.id, { onDelete: "cascade" }),
-  type: text("type").notNull(), // extraccion, implante, general, etc.
-  status: text("status").notNull().default("pending"), // pending, signed, rejected
+  type: text("type").notNull(),
+  content: text("content"),
+  status: text("status").notNull().default("pending"),
   signatureUrl: text("signature_url"),
+  signatureData: text("signature_data"),
+  portalToken: text("portal_token"),
   signedAt: timestamp("signed_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

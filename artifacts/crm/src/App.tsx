@@ -17,6 +17,11 @@ import ClinicalHistory from "@/pages/clinical-history";
 import Inventory from "@/pages/inventory";
 import Treatments from "@/pages/treatments";
 import Billing from "@/pages/billing";
+import Pipeline from "@/pages/pipeline";
+import Lab from "@/pages/lab";
+import Marketing from "@/pages/marketing";
+import PortalBooking from "@/pages/portal-booking";
+import PortalConsent from "@/pages/portal-consent";
 
 
 import { setBaseUrl, setAuthTokenGetter } from "@workspace/api-client-react";
@@ -57,6 +62,11 @@ function Router() {
       <Route path="/clinical/:patientId" component={ClinicalHistory} />
       <Route path="/inventory" component={Inventory} />
       <Route path="/treatments" component={Treatments} />
+      <Route path="/pipeline" component={Pipeline} />
+      <Route path="/lab" component={Lab} />
+      <Route path="/marketing" component={Marketing} />
+      <Route path="/portal/agendar" component={PortalBooking} />
+      <Route path="/portal/consent/:token" component={PortalConsent} />
       <Route path="/" component={Dashboard} />
 
       <Route component={NotFound} />

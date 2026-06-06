@@ -1,4 +1,5 @@
 import Layout from "@/components/layout";
+import { PaymentPlansPanel } from "@/components/payment-plans-panel";
 import {
   useGetBillingSummary,
   useListPayments,
@@ -1151,6 +1152,8 @@ export default function Billing() {
             ))}
           </div>
         )}
+
+        <PaymentPlansPanel patients={(patients ?? []).map((p) => ({ id: p.id, name: p.name }))} />
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

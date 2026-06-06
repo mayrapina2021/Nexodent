@@ -1,7 +1,7 @@
 import Layout from "@/components/layout";
 import { useGetDashboardStats, useGetTodayAppointments, useGetRecentActivity, useGetMonthlyChart } from "@workspace/api-client-react";
 import { motion } from "framer-motion";
-import { Users, CalendarCheck, MessageSquare, CheckCircle, UserPlus, MessageCircle, Activity } from "lucide-react";
+import { Users, CalendarCheck, MessageSquare, CheckCircle, UserPlus, MessageCircle, Activity, DollarSign, AlertTriangle, Stethoscope } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -90,6 +90,39 @@ export default function Dashboard() {
             </motion.div>
           ))}
         </div>
+
+        {/* Finanzas avanzadas */}
+        {!statsLoading && stats && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card className="border-emerald-200 bg-emerald-50/50">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-emerald-100"><DollarSign className="w-5 h-5 text-emerald-700" /></div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Ingresos reales del mes</p>
+                  <p className="text-xl font-bold">{formatCurrency((stats as { actualMonthlyRevenue?: number }).actualMonthlyRevenue ?? 0)}</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-amber-200 bg-amber-50/50">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-amber-100"><AlertTriangle className="w-5 h-5 text-amber-700" /></div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Cuotas vencidas</p>
+                  <p className="text-xl font-bold">{(stats as { overdueInstallments?: number }).overdueInstallments ?? 0}</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-violet-200 bg-violet-50/50">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-violet-100"><Stethoscope className="w-5 h-5 text-violet-700" /></div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Tratamientos activos</p>
+                  <p className="text-xl font-bold">{(stats as { activeTreatments?: number }).activeTreatments ?? 0}</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Gráficas */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -14,3 +14,6 @@ export * from "./inventory";
 export * from "./billing";
 export * from "./lab-orders";
 export * from "./clinical-docs";
+export * from "./periodontogram";
+export * from "./payment-plans";
+export * from "./portal";

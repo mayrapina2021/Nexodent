@@ -13,6 +13,12 @@ import aiTrainingRouter from "./ai-training";
 import clinicalRouter from "./clinical";
 import billingRouter from "./billing";
 import inventoryRouter from "./inventory";
+import pipelineRouter from "./pipeline";
+import labRouter from "./lab";
+import galleryRouter from "./gallery";
+import paymentPlansRouter from "./payment-plans";
+import portalRouter from "./portal";
+import marketingRouter from "./marketing";
 
 
 const router: IRouter = Router();
@@ -31,6 +37,12 @@ router.use(aiTrainingRouter);
 router.use(clinicalRouter);
 router.use(billingRouter);
 router.use(inventoryRouter);
+router.use(pipelineRouter);
+router.use(labRouter);
+router.use(galleryRouter);
+router.use(paymentPlansRouter);
+router.use(portalRouter);
+router.use(marketingRouter);
 
 
 export default router;

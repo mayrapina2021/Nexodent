@@ -112,6 +112,7 @@ function AnimatedBg() {
 // ── Navigation config ────────────────────────────────────────────────────────
 const mainNav = [
   { href: "/dashboard", label: "Panel", icon: LayoutDashboard },
+  { href: "/pipeline", label: "Pipeline", icon: Workflow },
   { href: "/patients", label: "Pacientes", icon: Users },
   { href: "/appointments", label: "Agenda", icon: CalendarIcon },
   { href: "/quotations", label: "Presupuestos", icon: FileText },
@@ -122,6 +123,8 @@ const mainNav = [
 ];
 
 const moreNav = [
+  { href: "/lab", label: "Laboratorio", icon: Package },
+  { href: "/marketing", label: "Marketing", icon: MessageSquare },
   { href: "/whatsapp", label: "WhatsApp", icon: Smartphone },
   { href: "/automations", label: "Automatizaciones", icon: Workflow },
   { href: "/ai-training", label: "Entrenar IA", icon: Brain },

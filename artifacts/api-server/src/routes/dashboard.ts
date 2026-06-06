@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, patientsTable, appointmentsTable, conversationsTable, messagesTable, treatmentsTable } from "@workspace/db";
+import { db, patientsTable, appointmentsTable, conversationsTable, messagesTable, treatmentsTable, paymentsTable, paymentPlanInstallmentsTable, paymentPlansTable } from "@workspace/db";
 import { sql, eq, gte, and } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -34,6 +34,23 @@ router.get("/dashboard/stats", async (req, res): Promise<void> => {
     estimatedRevenue += treatmentMap.get(a.treatment) || 250000;
   }
 
+  const [paymentsMonthRow] = await db.select({ total: sql<number>`COALESCE(SUM(amount), 0)::int` })
+    .from(paymentsTable)
+    .where(and(gte(paymentsTable.paymentDate, startOfMonth), sql`${paymentsTable.paymentType} != 'devolucion'`));
+
+  const [overdueRow] = await db.select({ count: sql<number>`count(*)::int` })
+    .from(paymentPlanInstallmentsTable)
+    .innerJoin(paymentPlansTable, eq(paymentPlanInstallmentsTable.planId, paymentPlansTable.id))
+    .where(and(
+      eq(paymentPlanInstallmentsTable.status, "pending"),
+      sql`${paymentPlanInstallmentsTable.dueDate} <= ${today}`,
+      eq(paymentPlansTable.status, "active"),
+    ));
+
+  const [pipelineWonRow] = await db.select({ count: sql<number>`count(*)::int` })
+    .from(patientsTable)
+    .where(sql`${patientsTable.status} IN ('won', 'in_treatment')`);
+
   res.json({
     totalPatients: totalPatientsRow?.count ?? 0,
     newPatientsThisMonth: newPatientsRow?.count ?? 0,
@@ -42,6 +59,9 @@ router.get("/dashboard/stats", async (req, res): Promise<void> => {
     pendingMessages: unreadRow?.count ?? 0,
     confirmedAppointments: confirmedRow?.count ?? 0,
     estimatedMonthlyRevenue: estimatedRevenue,
+    actualMonthlyRevenue: paymentsMonthRow?.total ?? 0,
+    overdueInstallments: overdueRow?.count ?? 0,
+    activeTreatments: pipelineWonRow?.count ?? 0,
     activeConversations: activeConvRow?.count ?? 0,
   });
 });

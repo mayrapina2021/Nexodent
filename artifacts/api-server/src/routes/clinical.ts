@@ -1,6 +1,8 @@
 import { Router, type IRouter } from "express";
-import { db, quotationsTable, evolutionNotesTable, patientsTable, settingsTable, odontogramsTable, consentFormsTable } from "@workspace/db";
+import { db, quotationsTable, evolutionNotesTable, patientsTable, settingsTable, odontogramsTable, consentFormsTable, periodontogramsTable } from "@workspace/db";
 import { eq, desc, sql } from "drizzle-orm";
+import { randomBytes } from "crypto";
+import { savePortalToken } from "./portal";
 import {
   CreateEvolutionNoteBody,
   CreateQuotationBody,
@@ -26,7 +28,22 @@ router.get("/clinical/evolution/:patientId", async (req, res): Promise<void> => 
 router.post("/clinical/evolution", async (req, res): Promise<void> => {
   const parsed = CreateEvolutionNoteBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const [note] = await db.insert(evolutionNotesTable).values(parsed.data).returning();
+
+  const body = req.body as Record<string, unknown>;
+  const noteType = body.noteType === "soap" ? "soap" : "general";
+  const values = {
+    ...parsed.data,
+    noteType,
+    subjective: typeof body.subjective === "string" ? body.subjective : null,
+    objective: typeof body.objective === "string" ? body.objective : null,
+    assessment: typeof body.assessment === "string" ? body.assessment : null,
+    plan: typeof body.plan === "string" ? body.plan : null,
+    content: noteType === "soap"
+      ? [body.subjective, body.objective, body.assessment, body.plan].filter(Boolean).join("\n\n")
+      : parsed.data.content,
+  };
+
+  const [note] = await db.insert(evolutionNotesTable).values(values).returning();
   res.status(201).json(note);
 });
 
@@ -72,14 +89,70 @@ router.get("/clinical/consent/:patientId", async (req, res): Promise<void> => {
   res.json(forms);
 });
 
+const CONSENT_TEXT: Record<string, string> = {
+  general: "Autorizo el tratamiento odontológico indicado, habiendo recibido información sobre riesgos y beneficios.",
+  extraccion: "Autorizo la extracción dental, comprendiendo los riesgos del procedimiento.",
+  implante: "Autorizo la colocación de implante dental con la información recibida.",
+  endodoncia: "Autorizo el tratamiento de endodoncia indicado.",
+};
+
 router.post("/clinical/consent", async (req, res): Promise<void> => {
-  const { patientId, type } = req.body;
+  const { patientId, type, sendWhatsApp } = req.body;
+  const token = randomBytes(32).toString("hex");
+  const content = CONSENT_TEXT[type] ?? CONSENT_TEXT.general;
+
   const [form] = await db.insert(consentFormsTable)
-    .values({ patientId, type, status: "pending" })
+    .values({ patientId, type, content, status: "pending", portalToken: token })
     .returning();
-  
-  // Opcional: Enviar WhatsApp con link de firma (placeholder por ahora)
-  res.status(201).json(form);
+
+  await savePortalToken(token, patientId, "consent", form.id);
+
+  if (sendWhatsApp) {
+    try {
+      const [patient] = await db.select().from(patientsTable).where(eq(patientsTable.id, patientId));
+      const [settings] = await db.select().from(settingsTable).limit(1);
+      const sock = getWhatsAppSock();
+      if (patient && sock) {
+        const baseUrl = process.env.CRM_URL ?? "https://nexodentbot.web.app";
+        const link = `${baseUrl}/portal/consent/${token}`;
+        const clinicName = settings?.clinicName ?? "Nexodent";
+        const jid = phoneToJid(patient.phone);
+        await sock.sendMessage(jid, {
+          text: `*${clinicName}*\n\nEstimado(a) *${patient.name}*, le enviamos su consentimiento informado para firma digital:\n\n${link}\n\nEl enlace es válido por 7 días.`,
+        });
+      }
+    } catch (err) {
+      logger.error({ err }, "Error enviando consentimiento por WhatsApp");
+    }
+  }
+
+  const baseUrl = process.env.CRM_URL ?? "https://nexodentbot.web.app";
+  res.status(201).json({ ...form, signUrl: `${baseUrl}/portal/consent/${token}` });
+});
+
+// Periodontograma
+router.get("/clinical/periodontogram/:patientId", async (req, res): Promise<void> => {
+  const patientId = parseInt(req.params.patientId, 10);
+  const [record] = await db.select().from(periodontogramsTable).where(eq(periodontogramsTable.patientId, patientId));
+  if (!record) { res.json({ patientId, data: {}, updatedAt: new Date() }); return; }
+  res.json(record);
+});
+
+router.put("/clinical/periodontogram/:patientId", async (req, res): Promise<void> => {
+  const patientId = parseInt(req.params.patientId, 10);
+  const { data } = req.body;
+  const [existing] = await db.select().from(periodontogramsTable).where(eq(periodontogramsTable.patientId, patientId));
+
+  if (existing) {
+    const [updated] = await db.update(periodontogramsTable)
+      .set({ data, updatedAt: new Date() })
+      .where(eq(periodontogramsTable.id, existing.id))
+      .returning();
+    res.json(updated);
+  } else {
+    const [created] = await db.insert(periodontogramsTable).values({ patientId, data }).returning();
+    res.status(201).json(created);
+  }
 });
 
 // Presupuestos

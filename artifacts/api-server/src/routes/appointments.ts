@@ -66,7 +66,11 @@ async function syncPatientStatus(patientId: number): Promise<void> {
   }
 
   if (newStatus) {
-    await db.update(patientsTable).set({ status: newStatus }).where(eq(patientsTable.id, patientId));
+    const [patient] = await db.select({ status: patientsTable.status }).from(patientsTable).where(eq(patientsTable.id, patientId));
+    const manualStatuses = ["contacted", "in_treatment", "won", "lost"];
+    if (!patient || !manualStatuses.includes(patient.status)) {
+      await db.update(patientsTable).set({ status: newStatus }).where(eq(patientsTable.id, patientId));
+    }
   }
 }
 
