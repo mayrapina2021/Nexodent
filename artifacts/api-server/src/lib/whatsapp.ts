@@ -8,6 +8,7 @@ import QRCode from "qrcode";
 import { db, conversationsTable, messagesTable, patientsTable, settingsTable } from "@workspace/db";
 import { eq, sql, or, and, desc } from "drizzle-orm";
 import { generateAIResponse } from "./groq";
+import { processAISendDocuments } from "./ai-send-documents";
 import { synthesizeAudio } from "./tts";
 import { logger } from "./logger";
 import { usePostgresAuthState } from "./postgres-auth-state";
@@ -340,6 +341,11 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo): Promise<void> 
         );
         conv = { ...conv, ...updatedConv, patientName: updatedConv.patientName ?? conv.patientName };
         aiText = amendAiMessageIfBookingFailed(aiResult.message, bookingOutcome);
+
+        const outboundJid = conv.whatsappJid ?? whatsappJid;
+        if (outboundJid && (aiResult.actions.sendQuotation || aiResult.actions.sendPaymentReceipt || aiResult.actions.sendConsentLink)) {
+          await processAISendDocuments(conv.patientId, formattedPhone, outboundJid, aiResult.actions);
+        }
       } catch (actionErr) {
         logger.error({ actionErr, conversationId: conv.id }, "Error en acciones IA; se envía respuesta al paciente igual");
         aiText = aiResult.message;

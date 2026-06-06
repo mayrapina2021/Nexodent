@@ -12,6 +12,7 @@ import {
 import { generateAIResponse } from "../lib/groq";
 import { getAvailableSlots } from "../lib/appointment-slots";
 import { processAIActions } from "../lib/ai-actions";
+import { processAISendDocuments } from "../lib/ai-send-documents";
 import { amendAiMessageIfBookingFailed } from "../lib/booking-message";
 import { sendMessageToConversation, getWAState, phoneToJid } from "../lib/whatsapp";
 import { phoneToJidIfValid } from "../lib/jid-utils";
@@ -241,6 +242,11 @@ router.post("/conversations/incoming", async (req, res): Promise<void> => {
       );
       conv = { ...conv, ...updatedConv };
       aiText = amendAiMessageIfBookingFailed(aiResult.message, bookingOutcome);
+
+      if (aiResult.actions.sendQuotation || aiResult.actions.sendPaymentReceipt || aiResult.actions.sendConsentLink) {
+        const jid = phoneToJid(formattedPhone);
+        await processAISendDocuments(conv.patientId ?? updatedConv.patientId, formattedPhone, jid, aiResult.actions);
+      }
     } catch (actionErr) {
       logger.error({ actionErr }, "Error en acciones IA incoming; se envía respuesta igual");
       aiText = aiResult.message;
@@ -419,6 +425,11 @@ router.post("/conversations/:id/ai-reply", async (req, res): Promise<void> => {
       { patientMessage: context },
     );
     void updatedConv;
+
+    if (aiResponse.actions.sendQuotation || aiResponse.actions.sendPaymentReceipt || aiResponse.actions.sendConsentLink) {
+      const jid = phoneToJid(formattedPhone);
+      await processAISendDocuments(updatedConv.patientId ?? conv.patientId, formattedPhone, jid, aiResponse.actions);
+    }
 
     const aiText = amendAiMessageIfBookingFailed(aiResponse.message, bookingOutcome);
 

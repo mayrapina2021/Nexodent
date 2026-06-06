@@ -3,6 +3,7 @@ import { db, settingsTable, conversationsTable, messagesTable, patientsTable, ai
 import { eq, desc, asc, or, ilike, and, gte } from "drizzle-orm";
 import { logger } from "./logger";
 import { DEFAULT_CLINIC_ADDRESS } from "./clinic-defaults";
+import { buildPatientPanelContext } from "./patient-panel-context";
 
 let _groq: Groq | null = null;
 function getGroq(): Groq {
@@ -19,6 +20,9 @@ export interface AIActions {
   rescheduleAppointment?: { appointmentId: number; date: string; startTime: string } | null;
   updatePhone?: { phone: string } | null;
   updateStatus?: { status: "new" | "interested" | "scheduled" | "attended" | "in_treatment" | "completed" } | null;
+  sendQuotation?: { quotationId: number } | null;
+  sendPaymentReceipt?: { paymentId: number } | null;
+  sendConsentLink?: { consentId: number } | null;
 }
 
 export interface AIResponse {
@@ -124,47 +128,24 @@ export async function generateAIResponse(
       }
 
       if (patientId) {
-        const [patient, quotes, appointments] = await Promise.all([
-          db.select().from(patientsTable).where(eq(patientsTable.id, patientId)).limit(1),
-          db.select().from(quotationsTable).where(eq(quotationsTable.patientId, patientId)).orderBy(desc(quotationsTable.createdAt)).limit(3),
-          db.select().from(appointmentsTable).where(eq(appointmentsTable.patientId, patientId)).orderBy(desc(appointmentsTable.date)).limit(5),
-        ]);
+        const [patient] = await db.select().from(patientsTable).where(eq(patientsTable.id, patientId)).limit(1);
 
-        if (patient[0]) {
-          const pData = patient[0];
+        if (patient) {
+          const pData = patient;
           const firstName = pData.name.split(" ")[0];
-          patientContext = `\nPACIENTE ENCONTRADO:\n- Nombre: ${pData.name} (llámalo/a "${firstName}")\n- Teléfono: ${pData.phone}\n- Estado: ${pData.status}`;
-          
-          dataContext += "\n━━━ DATOS DEL PANEL ━━━";
-
-          const upcomingAppts = appointments
-            .filter((a) => (a.status === "scheduled" || a.status === "confirmed") && a.date >= colombiaDate)
-            .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
-          
-          if (quotes.length > 0) {
-            dataContext += "\nCOTIZACIONES:";
-            for (const q of quotes) {
-              const items = (q.items as any[]).map(it => `- ${it.service}: ${Number(it.price).toLocaleString()} pesos`).join("\n");
-              dataContext += `\n#${q.id} (${q.status}):\n${items}\nTOTAL: ${Number(q.total).toLocaleString()} pesos\n`;
-            }
-          }
-
-          if (appointments.length > 0) {
-            dataContext += "\nCITAS DEL PACIENTE (usa appointmentId para cancelar o reagendar):";
-            if (upcomingAppts.length > 0) {
-              dataContext += "\nPRÓXIMAS (activas):";
-              for (const a of upcomingAppts) {
-                dataContext += `\n- appointmentId ${a.id} | ${a.date} ${to12h(a.startTime)} | ${a.treatment} (${a.status})`;
-              }
-            }
-            const pastOrOther = appointments.filter((a) => !upcomingAppts.some((u) => u.id === a.id));
-            if (pastOrOther.length > 0) {
-              dataContext += "\nHISTORIAL RECIENTE:";
-              for (const a of pastOrOther.slice(0, 3)) {
-                dataContext += `\n- appointmentId ${a.id} | ${a.date} ${to12h(a.startTime)} | ${a.treatment} (${a.status})`;
-              }
-            }
-          }
+          patientContext = `\nPACIENTE IDENTIFICADO (patientId ${pData.id}):\n- Nombre: ${pData.name} (llámalo/a "${firstName}")\n- Teléfono: ${pData.phone}\n- Estado pipeline: ${pData.status}`;
+          dataContext = await buildPatientPanelContext(patientId, colombiaDate);
+        }
+      } else if (conv?.phone) {
+        const cleanPhone = conv.phone.replace(/\D/g, "");
+        const [pByConvPhone] = await db.select().from(patientsTable).where(or(
+          eq(patientsTable.phone, conv.phone),
+          ilike(patientsTable.phone, `%${cleanPhone.slice(-10)}%`),
+        )).limit(1);
+        if (pByConvPhone) {
+          const firstName = pByConvPhone.name.split(" ")[0];
+          patientContext = `\nPACIENTE IDENTIFICADO (patientId ${pByConvPhone.id}):\n- Nombre: ${pByConvPhone.name} (llámalo/a "${firstName}")\n- Teléfono: ${pByConvPhone.phone}\n- Estado pipeline: ${pByConvPhone.status}`;
+          dataContext = await buildPatientPanelContext(pByConvPhone.id, colombiaDate);
         }
       }
     }
@@ -247,10 +228,13 @@ PAUTAS IMPORTANTES PARA TU COMPORTAMIENTO:
 - Respuestas completas y asesoría: Cuando te pregunten por tratamientos (como implantes, diseños, etc.), lee bien los ARTÍCULOS DE AYUDA. Da una explicación detallada y clara de las opciones.
 - Precios y variaciones: Si das un precio, aclara siempre que es un "precio base" y que puede variar dependiendo del caso clínico. Usa siempre la palabra "pesos" (ej. "Cuesta 100.000 pesos"). ¡PROHIBIDO usar el símbolo "$"!
 - Citas de valoración: Puedes invitar a agendar valoración cuando pidan precios o info. Ofrece horarios disponibles y, cuando el paciente confirme fecha y hora (sí, listo, me sirve, agéndame...), reserva con bookAppointment.
-- Cotizaciones: Si en DATOS DEL PANEL hay cotizaciones, puedes resumir servicios y totales en pesos cuando el paciente lo pida. Si necesitan el PDF/imagen formal, indica que un asesor puede enviarlo desde el panel.
-- Pagos: No tienes acceso a los pagos ni abonos. Si te piden un recibo, dile con amabilidad que un asesor humano lo revisará pronto.
+- Cotizaciones: Si hay presupuestos en DATOS DEL PANEL, resume servicios y totales. Si el paciente pide el presupuesto formal/imagen/PDF, usa sendQuotation con el quotationId correcto.
+- Abonos y recibos: Puedes informar saldos y abonos del paciente. Si pide su recibo/comprobante de un abono registrado, usa sendPaymentReceipt con el paymentId (NUNCA devoluciones).
+- Consentimientos: Si hay consentimiento pendiente y el paciente lo pide, usa sendConsentLink con consentId para enviar el link de firma.
+- REGLA CRÍTICA: Solo puedes hablar y enviar información del paciente identificado abajo. NUNCA datos de otros pacientes. NUNCA inventes presupuestos, pagos o citas que no estén en DATOS DEL PANEL.
+- Devoluciones: No proceses ni envíes recibos de devolución; indica que un asesor humano lo revisará.
 ${slotsSection}
-ACCESO AL PANEL: Tienes acceso a citas, cotizaciones y tratamientos.
+ACCESO AL PANEL: Tienes acceso completo a la ficha del paciente identificado: citas, presupuestos, abonos, consentimientos, diagnóstico, plan, evolución y planes de pago.
 - Si el paciente da un número o nombre, úsalo para identificarlo.
 - Si ya está identificado (ver abajo), usa esa información para responderle mejor.
 - Registra pacientes nuevos con registerPatient cuando tengas nombre y motivo de consulta.
@@ -266,6 +250,9 @@ ACCIONES DISPONIBLES (JSON):
 - rescheduleAppointment: {"appointmentId":123,"date":"YYYY-MM-DD","startTime":"HH:MM"}
 - updatePhone: {"phone":"numero sin espacios"}
 - updateStatus: {"status":"interested"}
+- sendQuotation: {"quotationId":123}
+- sendPaymentReceipt: {"paymentId":456}
+- sendConsentLink: {"consentId":789}
 
 REGLA DE AGENDA:
 - Usa bookAppointment solo para cita NUEVA cuando el paciente confirme fecha y hora.
@@ -323,6 +310,9 @@ FORMATO JSON:
         rescheduleAppointment: parsed.actions?.rescheduleAppointment ?? null,
         updatePhone: parsed.actions?.updatePhone ?? null,
         updateStatus: parsed.actions?.updateStatus ?? null,
+        sendQuotation: parsed.actions?.sendQuotation ?? null,
+        sendPaymentReceipt: parsed.actions?.sendPaymentReceipt ?? null,
+        sendConsentLink: parsed.actions?.sendConsentLink ?? null,
       },
     };
   } catch (err) {
