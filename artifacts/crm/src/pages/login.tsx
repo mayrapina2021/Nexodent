@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { motion } from "framer-motion";
 import { saveAuthToken } from "@/lib/auth-token";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Float, MeshDistortMaterial, OrbitControls, Sphere } from "@react-three/drei";
 import { useRef } from "react";
@@ -76,7 +77,7 @@ function ToothCore() {
 function Scene3D() {
   return (
     <Canvas camera={{ position: [0, 0, 5], fov: 45 }} gl={{ antialias: true }}>
-      <color attach="background" args={["#eeeae1"]} />
+      <color attach="background" args={["#1a1814"]} />
       <ambientLight intensity={0.7} />
       <pointLight position={[5, 5, 5]} color="#fef3c7" intensity={2} />
       <pointLight position={[-5, -5, -5]} color="#e0f2fe" intensity={1.5} />
@@ -113,7 +114,7 @@ export default function Login() {
   }, [isLoadingUser, user, setLocation]);
 
   if (isLoadingUser || user) {
-    return <div className="min-h-screen bg-[#eeeae1] flex items-center justify-center"><Skeleton className="w-12 h-12 rounded-full" /></div>;
+    return <div className="min-h-screen bg-background flex items-center justify-center"><Skeleton className="w-12 h-12 rounded-full" /></div>;
   }
 
   const onSubmit = (values: LoginFormValues) => {
@@ -128,19 +129,22 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex overflow-hidden" style={{ background: "#eeeae1" }}>
+    <div className="min-h-screen flex overflow-hidden bg-background">
+      <div className="absolute top-4 right-4 z-20">
+        <ThemeToggle />
+      </div>
       {/* LEFT — 3D Scene */}
-      <div className="hidden lg:flex lg:w-3/5 relative">
-        <Suspense fallback={<div className="w-full h-full bg-[#eeeae1]" />}>
+      <div className="hidden lg:flex lg:w-3/5 relative bg-muted">
+        <Suspense fallback={<div className="w-full h-full bg-muted" />}>
           <Scene3D />
         </Suspense>
         {/* Overlay text */}
-        <div className="absolute bottom-12 left-12 text-slate-900">
+        <div className="absolute bottom-12 left-12 text-foreground">
           <motion.div initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5, duration: 0.8 }}>
             <h1 className="text-5xl font-black tracking-tight bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 bg-clip-text text-transparent">
               NEXODENT
             </h1>
-            <p className="text-slate-600 mt-2 text-lg font-light tracking-wide">
+            <p className="text-muted-foreground mt-2 text-lg font-light tracking-wide">
               Sistema de Gestión Odontológica Inteligente
             </p>
             <div className="mt-6 flex gap-3">
@@ -155,13 +159,12 @@ export default function Login() {
       </div>
 
       {/* RIGHT — Login Form */}
-      <div className="w-full lg:w-2/5 flex items-center justify-center p-8 relative"
-        style={{ background: "linear-gradient(135deg, #eeeae1 0%, #e5e0d4 50%, #eeeae1 100%)" }}>
+      <div className="w-full lg:w-2/5 flex items-center justify-center p-8 relative bg-card border-l border-border">
         
         {/* Glow effect */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-blue-100 rounded-full blur-3xl opacity-50" />
-          <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-amber-50 rounded-full blur-3xl opacity-50" />
+          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-primary/10 rounded-full blur-3xl opacity-50" />
+          <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-accent/10 rounded-full blur-3xl opacity-50" />
         </div>
 
         <motion.div
@@ -178,31 +181,31 @@ export default function Login() {
                 <path d="M12 2C8.5 2 7 4 7 6c0 1.5.5 3 1 4.5C8.5 12.5 9 14 9 16c0 2 .5 4 3 4s3-2 3-4c0-2 .5-3.5 1-5 .5-1.5 1-3 1-4.5C17 4 15.5 2 12 2z"/>
               </svg>
             </div>
-            <h2 className="text-3xl font-black text-slate-900 tracking-tight">Nexodent</h2>
-            <p className="text-slate-500 text-sm mt-1">Accede a tu panel de control</p>
+            <h2 className="text-3xl font-black text-foreground tracking-tight">Nexodent</h2>
+            <p className="text-muted-foreground text-sm mt-1">Accede a tu panel de control</p>
           </div>
 
           {/* Form */}
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
             <div>
-              <Label className="text-slate-700 text-sm font-medium">Correo electrónico</Label>
+              <Label className="text-foreground text-sm font-medium">Correo electrónico</Label>
               <Input
                 type="email"
                 placeholder="tu@email.com"
                 autoComplete="email"
                 {...form.register("email")}
-                className="mt-1.5 h-12 text-slate-900 placeholder:text-slate-500 border-slate-300 focus:border-blue-500 focus:ring-blue-500/10 bg-[#f5f1e6]"
+                className="mt-1.5 h-12"
               />
               {form.formState.errors.email && <p className="text-red-500 text-xs mt-1">{form.formState.errors.email.message}</p>}
             </div>
 
             <div>
-              <Label className="text-slate-700 text-sm font-medium">Contraseña</Label>
+              <Label className="text-foreground text-sm font-medium">Contraseña</Label>
               <Input
                 type="password"
                 autoComplete="current-password"
                 {...form.register("password")}
-                className="mt-1.5 h-12 text-slate-900 placeholder:text-slate-500 border-slate-300 focus:border-blue-500 focus:ring-blue-500/10 bg-[#f5f1e6]"
+                className="mt-1.5 h-12"
               />
               {form.formState.errors.password && <p className="text-red-500 text-xs mt-1">{form.formState.errors.password.message}</p>}
             </div>
@@ -225,7 +228,7 @@ export default function Login() {
             </Button>
           </form>
 
-          <p className="text-center text-slate-400 text-xs mt-8">
+          <p className="text-center text-muted-foreground text-xs mt-8">
             © 2025 Nexodent — Sistema Clínico Inteligente
           </p>
         </motion.div>

@@ -324,7 +324,10 @@ async function handleIncomingMessage(msg: proto.IWebMessageInfo): Promise<void> 
     let aiText = "";
     try {
       const availableSlots = await getAvailableSlots();
-      const aiResult = await generateAIResponse(conv.id, text, { availableSlots });
+      const aiResult = await generateAIResponse(conv.id, text, {
+        availableSlots,
+        contactPhone: formattedPhone,
+      });
 
       try {
         const { conversation: updatedConv, bookingOutcome } = await processAIActions(

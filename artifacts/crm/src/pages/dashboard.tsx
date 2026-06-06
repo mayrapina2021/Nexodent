@@ -94,30 +94,36 @@ export default function Dashboard() {
         {/* Finanzas avanzadas */}
         {!statsLoading && stats && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="border-emerald-200 bg-emerald-50/50">
+            <Card className="border-emerald-200/80 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-950/40">
               <CardContent className="p-4 flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-emerald-100"><DollarSign className="w-5 h-5 text-emerald-700" /></div>
+                <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/60">
+                  <DollarSign className="w-5 h-5 text-emerald-700 dark:text-emerald-300" />
+                </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Ingresos reales del mes</p>
-                  <p className="text-xl font-bold">{formatCurrency((stats as { actualMonthlyRevenue?: number }).actualMonthlyRevenue ?? 0)}</p>
+                  <p className="text-xs text-emerald-800/70 dark:text-emerald-200/80">Ingresos reales del mes</p>
+                  <p className="text-xl font-bold text-emerald-950 dark:text-emerald-50">{formatCurrency((stats as { actualMonthlyRevenue?: number }).actualMonthlyRevenue ?? 0)}</p>
                 </div>
               </CardContent>
             </Card>
-            <Card className="border-amber-200 bg-amber-50/50">
+            <Card className="border-amber-200/80 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/40">
               <CardContent className="p-4 flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-amber-100"><AlertTriangle className="w-5 h-5 text-amber-700" /></div>
+                <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/60">
+                  <AlertTriangle className="w-5 h-5 text-amber-700 dark:text-amber-300" />
+                </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Cuotas vencidas</p>
-                  <p className="text-xl font-bold">{(stats as { overdueInstallments?: number }).overdueInstallments ?? 0}</p>
+                  <p className="text-xs text-amber-800/70 dark:text-amber-200/80">Cuotas vencidas</p>
+                  <p className="text-xl font-bold text-amber-950 dark:text-amber-50">{(stats as { overdueInstallments?: number }).overdueInstallments ?? 0}</p>
                 </div>
               </CardContent>
             </Card>
-            <Card className="border-violet-200 bg-violet-50/50">
+            <Card className="border-violet-200/80 bg-violet-50/50 dark:border-violet-800 dark:bg-violet-950/40">
               <CardContent className="p-4 flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-violet-100"><Stethoscope className="w-5 h-5 text-violet-700" /></div>
+                <div className="p-2 rounded-lg bg-violet-100 dark:bg-violet-900/60">
+                  <Stethoscope className="w-5 h-5 text-violet-700 dark:text-violet-300" />
+                </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Tratamientos activos</p>
-                  <p className="text-xl font-bold">{(stats as { activeTreatments?: number }).activeTreatments ?? 0}</p>
+                  <p className="text-xs text-violet-800/70 dark:text-violet-200/80">Tratamientos activos</p>
+                  <p className="text-xl font-bold text-violet-950 dark:text-violet-50">{(stats as { activeTreatments?: number }).activeTreatments ?? 0}</p>
                 </div>
               </CardContent>
             </Card>

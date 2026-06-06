@@ -9,6 +9,7 @@ import {
 } from "./appointment-confirmation";
 import type { BookingOutcome } from "./booking-message";
 import { logger } from "./logger";
+import { isValidPatientName, sanitizePatientName } from "./patient-name-utils";
 
 function addMinutes(time: string, minutes: number): string {
   const [h, m] = time.split(":").map(Number);
@@ -135,10 +136,21 @@ export async function processAIActions(
 
   // Registrar paciente ANTES del gate de agenda (misma respuesta puede traer register + book)
   if (registerPatient?.name && !current.patientId) {
+    const cleanName = sanitizePatientName(registerPatient.name);
+    if (!isValidPatientName(cleanName)) {
+      logger.warn(
+        { rawName: registerPatient.name, conversationId: conv.id },
+        "registerPatient rechazado: nombre inválido (emojis o genérico)",
+      );
+      registerPatient = null;
+    } else {
+      registerPatient = { ...registerPatient, name: cleanName };
+    }
+  }
+
+  if (registerPatient?.name && !current.patientId) {
     try {
-      const contactPhone = registerPatient.phone
-        ? (registerPatient.phone.startsWith("+") ? registerPatient.phone : `+${registerPatient.phone.replace(/\D/g, "")}`)
-        : formattedPhone;
+      const contactPhone = formattedPhone;
 
       const existingByPhone = await db.select().from(patientsTable).where(eq(patientsTable.phone, contactPhone));
       let patientId: number;
@@ -146,7 +158,11 @@ export async function processAIActions(
       if (existingByPhone.length > 0) {
         patientId = existingByPhone[0].id;
         await db.update(patientsTable).set({
+          name: registerPatient.name,
           treatment: registerPatient.treatment || existingByPhone[0].treatment,
+          notes: registerPatient.notes ?? existingByPhone[0].notes,
+          email: registerPatient.email ?? existingByPhone[0].email,
+          age: registerPatient.age ?? existingByPhone[0].age,
         }).where(eq(patientsTable.id, patientId));
       } else {
         const [newPatient] = await db.insert(patientsTable).values({
@@ -154,6 +170,9 @@ export async function processAIActions(
           phone: contactPhone,
           treatment: registerPatient.treatment || "Consulta general",
           status: "new",
+          notes: registerPatient.notes ?? null,
+          email: registerPatient.email ?? null,
+          age: registerPatient.age ?? null,
         }).returning();
         patientId = newPatient.id;
       }
@@ -363,31 +382,10 @@ export async function processAIActions(
         patientId = existingByPhone?.id ?? null;
       }
 
-      if (!patientId && current.patientName?.trim()) {
-        const cleanName = current.patientName.replace(/[^\p{L}\p{N}\s]/gu, "").trim() || current.patientName.trim();
-        const [existingByPhone] = await db.select().from(patientsTable).where(eq(patientsTable.phone, formattedPhone));
-        if (existingByPhone) {
-          patientId = existingByPhone.id;
-          await db.update(conversationsTable).set({ patientId }).where(eq(conversationsTable.id, current.id));
-          current = { ...current, patientId };
-        } else if (cleanName.length >= 2 && !/^\d+$/.test(cleanName)) {
-          const [newPatient] = await db.insert(patientsTable).values({
-            name: cleanName,
-            phone: formattedPhone,
-            treatment: bookAppointment.treatment || "Consulta general",
-            status: "new",
-          }).returning();
-          patientId = newPatient.id;
-          await db.update(conversationsTable).set({
-            patientId,
-            patientName: cleanName,
-          }).where(eq(conversationsTable.id, current.id));
-          current = { ...current, patientId, patientName: cleanName };
-          logger.info({ patientId, name: cleanName, source }, "Paciente auto-creado para agendar cita por IA");
-        }
-      }
-
-      if (patientId) {
+      if (!patientId) {
+        logger.warn({ bookAppointment, conversationId: conv.id }, "Cita rechazada: paciente no registrado — debe recopilar datos primero");
+        bookingOutcome = { ok: false, reason: "no_patient" };
+      } else if (patientId) {
         const [settings] = await db.select().from(settingsTable).limit(1);
         const duration = settings?.defaultAppointmentDuration ?? 60;
         const endTime = addMinutes(startTime, duration);
@@ -444,9 +442,6 @@ export async function processAIActions(
             throw txErr;
           }
         }
-      } else {
-        logger.warn({ bookAppointment }, "No se pudo registrar cita: paciente no encontrado");
-        bookingOutcome = { ok: false, reason: "no_patient" };
       }
       }
     } catch (err) {

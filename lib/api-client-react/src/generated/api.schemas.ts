@@ -258,8 +258,15 @@ export interface Message {
   conversationId: number;
   content: string;
   sender: MessageSender;
+  messageType?: string | null;
+  mediaMimeType?: string | null;
+  hasMedia?: boolean | null;
   sentAt: string;
   read: boolean;
+}
+
+export interface DeleteConversation200 {
+  ok: boolean;
 }
 
 export interface ConversationDetail {

@@ -4,6 +4,7 @@ import {
   useGetConversation,
   useSendMessage,
   useSetConversationMode,
+  useDeleteConversation,
   getListConversationsQueryKey,
   getGetConversationQueryKey,
   getGetMessagesQueryKey,
@@ -11,7 +12,7 @@ import {
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { Search, Send, Bot, User, Phone, ImageIcon, FileText, Mic } from "lucide-react";
+import { Search, Send, Bot, User, Phone, Trash2, ImageIcon, Mic, Video, FileText, Sticker } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -19,10 +20,20 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { formatMessageDateTime } from "@/lib/datetime";
-
-const API_BASE = import.meta.env.VITE_API_URL ?? "https://nexodent-api.onrender.com";
+import { ChatMedia, mediaTypeLabel, previewFromMessage } from "@/components/chat-media";
 
 type ChatMessage = {
   id: number;
@@ -36,23 +47,30 @@ type ChatMessage = {
   read?: boolean;
 };
 
-const senderLabel: Record<string, string> = {
-  patient: "Paciente",
-  agent: "Agente",
-  ai: "IA",
-};
-
-function messageMediaUrl(messageId: number): string | null {
-  if (!messageId || messageId <= 0) return null;
-  return `${API_BASE}/api/messages/media/${messageId}`;
+function MediaTypeBadge({ type }: { type: string }) {
+  const icons: Record<string, typeof ImageIcon> = {
+    image: ImageIcon,
+    sticker: Sticker,
+    video: Video,
+    audio: Mic,
+    document: FileText,
+  };
+  const Icon = icons[type];
+  if (!Icon) return null;
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide opacity-80">
+      <Icon className="h-3 w-3" />
+      {mediaTypeLabel(type).replace(/^[^\s]+\s/, "")}
+    </span>
+  );
 }
 
 function MessageBubble({ msg }: { msg: ChatMessage }) {
   const isPatient = msg.sender === "patient";
   const isAi = msg.sender === "ai";
   const type = msg.messageType ?? "text";
-  const mediaUrl = messageMediaUrl(msg.id);
-  const showMedia = msg.hasMedia && !!mediaUrl;
+  const isMedia = type !== "text" && (msg.hasMedia || type !== "text");
+  const showMedia = msg.hasMedia && msg.id > 0;
 
   return (
     <div className={cn("flex", isPatient ? "justify-start" : "justify-end")}>
@@ -79,68 +97,45 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
           </div>
         )}
 
-        {showMedia && (type === "image" || type === "sticker") && (
-          <a href={mediaUrl!} target="_blank" rel="noopener noreferrer" className="block">
-            <img
-              src={mediaUrl!}
-              alt={msg.content}
-              className="rounded-lg max-h-64 w-full object-cover border border-border/30"
-              loading="lazy"
-            />
-          </a>
-        )}
+        {isMedia && <MediaTypeBadge type={type} />}
 
-        {showMedia && type === "video" && (
-          <video
-            src={mediaUrl!}
-            controls
-            className="rounded-lg max-h-64 w-full border border-border/30"
-            preload="metadata"
+        {showMedia && (
+          <ChatMedia
+            messageId={msg.id}
+            messageType={type}
+            mimeType={msg.mediaMimeType}
+            alt={msg.content}
           />
         )}
 
-        {showMedia && type === "audio" && (
-          <div className="space-y-1">
-            <div className="flex items-center gap-1 text-xs opacity-80">
-              <Mic className="h-3 w-3" />
-              <span>Nota de voz</span>
-            </div>
-            <audio src={mediaUrl!} controls className="w-full max-w-full" preload="metadata" />
-          </div>
-        )}
-
         {showMedia && type === "document" && (
-          <a
-            href={mediaUrl!}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={cn(
-              "flex items-center gap-2 rounded-lg border px-3 py-2 text-xs",
-              isPatient ? "border-border/50 hover:bg-muted/30" : "border-primary-foreground/20 hover:bg-primary-foreground/10",
-            )}
-          >
-            <FileText className="h-4 w-4 shrink-0" />
-            <span className="truncate">{msg.content}</span>
-          </a>
+          <p className="text-xs font-medium truncate">{msg.content}</p>
         )}
 
-        {(type === "text" || !showMedia || type === "image" || type === "sticker") &&
+        {type === "audio" && msg.content && (
+          <p className="text-xs italic opacity-90 whitespace-pre-wrap break-words">
+            {msg.content.startsWith("🎤") ? msg.content : `"${msg.content}"`}
+          </p>
+        )}
+
+        {(type === "text" || type === "image" || type === "sticker" || type === "video") &&
           msg.content &&
-          !(type === "document" && showMedia) && (
+          !(type === "image" && msg.content === "📷 Imagen") &&
+          !(type === "sticker" && msg.content === "🎭 Sticker") &&
+          !(type === "video" && msg.content === "🎬 Video") &&
+          type !== "audio" &&
+          type !== "document" && (
             <p className="whitespace-pre-wrap break-words">{msg.content}</p>
           )}
 
-        {!showMedia && type !== "text" && (
-          <div className="flex items-center gap-1 text-xs opacity-80">
-            {type === "image" || type === "sticker" ? <ImageIcon className="h-3 w-3" /> : null}
-            <span>{msg.content}</span>
-          </div>
+        {!showMedia && isMedia && (
+          <p className="text-xs opacity-80">{msg.content || mediaTypeLabel(type)}</p>
         )}
 
         <p
           className={cn(
             "text-xs",
-            isPatient ? "text-muted-foreground" : "text-primary-foreground/70",
+            isPatient ? "text-muted-foreground" : isAi ? "text-muted-foreground" : "text-primary-foreground/70",
           )}
         >
           {formatMessageDateTime(msg.sentAt)}
@@ -184,6 +179,23 @@ export default function Conversations() {
 
   const sendMessage = useSendMessage();
   const setMode = useSetConversationMode();
+  const deleteConversation = useDeleteConversation();
+
+  const handleDeleteConversation = (id: number) => {
+    deleteConversation.mutate(
+      { id },
+      {
+        onSuccess: () => {
+          if (selectedId === id) setSelectedId(null);
+          queryClient.invalidateQueries({ queryKey: getListConversationsQueryKey() });
+          toast({ title: "Conversación eliminada" });
+        },
+        onError: () => {
+          toast({ variant: "destructive", title: "No se pudo eliminar la conversación" });
+        },
+      },
+    );
+  };
 
   const handleSend = () => {
     if (!message.trim() || !selectedId) return;
@@ -304,14 +316,14 @@ export default function Conversations() {
                   key={conv.id}
                   onClick={() => setSelectedId(conv.id)}
                   className={cn(
-                    "p-4 cursor-pointer hover:bg-background/50 transition-colors border-b border-border/30",
+                    "p-4 cursor-pointer hover:bg-background/50 transition-colors border-b border-border/30 group",
                     selectedId === conv.id && "bg-background/70 border-l-2 border-l-accent",
                   )}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
                       <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-                        <span className="text-xs font-bold text-primary-foreground">
+                        <span className="text-xs font-bold text-primary">
                           {conv.patientName.slice(0, 2).toUpperCase()}
                         </span>
                       </div>
@@ -319,8 +331,8 @@ export default function Conversations() {
                         <p className="font-medium text-sm text-foreground truncate">
                           {(conv as { displayName?: string }).displayName ?? conv.patientName}
                         </p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {conv.lastMessage ?? "Sin mensajes"}
+                        <p className="text-xs text-foreground/70 truncate">
+                          {previewFromMessage(conv.lastMessage)}
                         </p>
                       </div>
                     </div>
@@ -348,25 +360,25 @@ export default function Conversations() {
               <Phone className="h-12 w-12 mx-auto mb-3 opacity-30" />
               <p>Selecciona una conversación para ver los mensajes</p>
               <p className="text-xs mt-2 max-w-sm mx-auto">
-                Se muestran mensajes del paciente, respuestas del panel, del teléfono del asistente, IA e imágenes.
+                Texto, imágenes, audios, videos, documentos y stickers de WhatsApp.
               </p>
             </div>
           </div>
         ) : (
           <div className="flex-1 flex flex-col bg-background/20">
-            <div className="px-6 py-4 border-b border-border/50 bg-card/50 flex items-center justify-between">
+            <div className="px-6 py-4 border-b border-border/50 bg-card/50 flex items-center justify-between gap-3">
               {detailLoading && !selected ? (
                 <Skeleton className="h-8 w-48" />
               ) : (
                 <>
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center">
-                      <span className="text-sm font-bold text-primary-foreground">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                      <span className="text-sm font-bold text-primary">
                         {selected?.patientName.slice(0, 2).toUpperCase()}
                       </span>
                     </div>
-                    <div>
-                      <p className="font-semibold text-foreground">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-foreground truncate">
                         {(selected as { displayName?: string })?.displayName ?? selected?.patientName}
                         {patient && (
                           <span className="text-xs font-normal text-muted-foreground ml-2">
@@ -374,7 +386,7 @@ export default function Conversations() {
                           </span>
                         )}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground truncate">
                         {(selected as { displayPhone?: string })?.displayPhone ?? selected?.phone}
                         {(selected as { phoneIsValid?: boolean })?.phoneIsValid === false && (
                           <span className="text-amber-500 ml-2">· Número WA pendiente de vincular</span>
@@ -382,17 +394,47 @@ export default function Conversations() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 shrink-0">
                     <div className="flex items-center gap-2">
                       <Bot className="h-4 w-4 text-muted-foreground" />
                       <Switch
                         checked={selected?.aiMode ?? true}
                         onCheckedChange={(v) => toggleAI(selected!.id, v)}
                       />
-                      <Label className="text-xs text-muted-foreground">
+                      <Label className="text-xs text-muted-foreground hidden sm:inline">
                         {selected?.aiMode ? "IA Activa" : "Manual"}
                       </Label>
                     </div>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
+                          title="Eliminar conversación"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>¿Eliminar esta conversación?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Se borrarán todos los mensajes de este chat del panel. El paciente en WhatsApp no se elimina;
+                            si escribe de nuevo, se creará una conversación nueva.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            onClick={() => handleDeleteConversation(selected!.id)}
+                          >
+                            Eliminar
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                 </>
               )}

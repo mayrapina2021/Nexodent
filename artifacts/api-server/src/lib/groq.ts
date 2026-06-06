@@ -4,6 +4,9 @@ import { eq, desc, asc, or, ilike, and, gte } from "drizzle-orm";
 import { logger } from "./logger";
 import { DEFAULT_CLINIC_ADDRESS } from "./clinic-defaults";
 import { buildPatientPanelContext } from "./patient-panel-context";
+import { compressSlotsToRanges } from "./slot-ranges";
+import { isValidPatientName } from "./patient-name-utils";
+import { formatColombianPhone, isValidColombianPhone } from "./conversation-patient-sync";
 
 let _groq: Groq | null = null;
 function getGroq(): Groq {
@@ -14,7 +17,14 @@ function getGroq(): Groq {
 }
 
 export interface AIActions {
-  registerPatient?: { name: string; phone?: string | null; treatment: string } | null;
+  registerPatient?: {
+    name: string;
+    phone?: string | null;
+    treatment: string;
+    notes?: string;
+    email?: string;
+    age?: number;
+  } | null;
   bookAppointment?: { date: string; startTime: string; treatment: string; notes?: string } | null;
   cancelAppointment?: { appointmentId: number } | null;
   rescheduleAppointment?: { appointmentId: number; date: string; startTime: string } | null;
@@ -35,6 +45,7 @@ interface AIOptions {
   patientName?: string;
   testMode?: boolean;
   availableSlots?: { label: string; slots: string[] }[];
+  contactPhone?: string;
 }
 
 function getColombiaNow(): { dateStr: string; timeStr: string; dayName: string } {
@@ -79,13 +90,22 @@ function formatAvailableSlotsForPrompt(
 HORARIOS DISPONIBLES: No hay cupos libres en los próximos 3 días laborables. Ofrece contactar la clínica o proponer otro día; no inventes horarios.
 `;
   }
-  const lines = withAvailability.map(
-    (d) => `- ${d.label}: ${d.slots.map((t) => to12h(t)).join(", ")} (reservar con startTime 24h: ${d.slots.join(", ")})`,
-  );
+  const lines = withAvailability.map((d) => {
+    const ranges = compressSlotsToRanges(d.slots);
+    const humanRanges = ranges
+      .map((r) => `${to12h(r.from)} a ${to12h(r.to)}`)
+      .join(" · ");
+    const internal = ranges
+      .map((r) => `${r.from}-${r.to} (inicios posibles 24h: ${r.sampleStarts.slice(0, 4).join(", ")}${r.sampleStarts.length > 4 ? "…" : ""})`)
+      .join("; ");
+    return `- ${d.label}: bloques ${humanRanges}\n  Referencia interna: ${internal}`;
+  });
   return `
 HORARIOS DISPONIBLES (para agendar cita nueva o reagendar; NO ejecutar hasta que el paciente confirme):
-- Puedes ofrecer estos cupos cuando el paciente quiera agendar o cambiar una cita.
-- Usa la fecha YYYY-MM-DD y startTime 24h HH:MM solo si el paciente CONFIRMA explícitamente.
+- Al paciente ofrece SOLO bloques amplios (ej. "de 8:00 a.m. a 11:00 a.m."). Máximo 2 bloques por día en tu mensaje.
+- PROHIBIDO listar docenas de horas sueltas (8:00, 8:15, 8:30...) en un solo mensaje.
+- Cuando el paciente elija un bloque, pregunta amablemente a qué hora le queda mejor dentro de ese rango.
+- Usa fecha YYYY-MM-DD y startTime 24h HH:MM solo si el paciente CONFIRMA explícitamente una hora concreta.
 - No inventes horarios fuera de esta lista.
 ${lines.join("\n")}
 `;
@@ -113,9 +133,14 @@ export async function generateAIResponse(
 
     let patientContext = "";
     let dataContext = "";
+    let contactPhone = opts.contactPhone ?? "";
+    let patientRegistered = false;
 
     if (conversationId && !opts.testMode) {
       const [conv] = await db.select().from(conversationsTable).where(eq(conversationsTable.id, conversationId));
+      if (conv?.phone && isValidColombianPhone(conv.phone)) {
+        contactPhone = formatColombianPhone(conv.phone);
+      }
       let patientId = conv?.patientId;
 
       const potentialPhone = patientMessage.replace(/\D/g, "");
@@ -131,6 +156,7 @@ export async function generateAIResponse(
         const [patient] = await db.select().from(patientsTable).where(eq(patientsTable.id, patientId)).limit(1);
 
         if (patient) {
+          patientRegistered = true;
           const pData = patient;
           const firstName = pData.name.split(" ")[0];
           patientContext = `\nPACIENTE IDENTIFICADO (patientId ${pData.id}):\n- Nombre: ${pData.name} (llámalo/a "${firstName}")\n- Teléfono: ${pData.phone}\n- Estado pipeline: ${pData.status}`;
@@ -143,6 +169,7 @@ export async function generateAIResponse(
           ilike(patientsTable.phone, `%${cleanPhone.slice(-10)}%`),
         )).limit(1);
         if (pByConvPhone) {
+          patientRegistered = true;
           const firstName = pByConvPhone.name.split(" ")[0];
           patientContext = `\nPACIENTE IDENTIFICADO (patientId ${pByConvPhone.id}):\n- Nombre: ${pByConvPhone.name} (llámalo/a "${firstName}")\n- Teléfono: ${pByConvPhone.phone}\n- Estado pipeline: ${pByConvPhone.status}`;
           dataContext = await buildPatientPanelContext(pByConvPhone.id, colombiaDate);
@@ -192,17 +219,18 @@ export async function generateAIResponse(
     }
 
     const assistantName = p?.name ?? "Dante";
+    const isFirstContact = conversationHistory.filter((m) => m.role === "assistant").length === 0;
 
     const personalitySection = p ? `
 PERFIL DE PERSONALIDAD (configuración de la clínica):
 - Rol: ${p.role}
 - Objetivo principal: ${p.mainGoal}
-- Tono: ${p.tone}
+- Tono: ${p.tone}, cálido, empático y muy amable — nunca seco ni robótico
 - Idioma: ${p.language}
 - Longitud de respuestas preferida: ${p.maxResponseLength}
-${p.dontRepeatGreeting ? "- No repitas saludos de presentación en cada mensaje; fluye de forma natural." : ""}
-${p.proactiveQuestions ? "- Haz preguntas proactivas para entender la necesidad del paciente." : ""}
-${p.suggestAppointments ? "- Puedes INVITAR a agendar valoración cuando hables de tratamientos o precios, pero NO reserves cita hasta que el paciente diga que sí y confirme fecha/hora." : ""}
+${p.dontRepeatGreeting ? "- No repitas la presentación completa en cada mensaje; solo la primera vez." : ""}
+${p.proactiveQuestions ? "- Haz preguntas proactivas con delicadeza, de a una o dos por mensaje." : ""}
+${p.suggestAppointments ? "- Puedes INVITAR a agendar valoración cuando hable de tratamientos o precios, pero primero registra al paciente si no existe." : ""}
 ${p.escalateKeywords ? `- Si el paciente menciona palabras como: ${p.escalateKeywords}, indica que un asesor humano atenderá pronto.` : ""}
 ${p.extraInstructions ? `- Instrucciones adicionales: ${p.extraInstructions}` : ""}
 ` : "";
@@ -218,61 +246,84 @@ ${clinicPhone ? `- Teléfono: ${clinicPhone}` : ""}
 REGLA DE UBICACIÓN: Si preguntan dónde están, dirección, dirección exacta, cómo llegar o ubicación, responde con la dirección completa de arriba. NUNCA digas que no puedes dar la dirección. NUNCA inventes otra calle o número distinto.
 `;
 
+    const contactSection = contactPhone
+      ? `
+CONTACTO WHATSAPP ACTUAL:
+- Teléfono del chat (usar SIEMPRE para registerPatient; phone: null): ${contactPhone}
+- PROHIBIDO pedir el número de teléfono al paciente — ya lo tienes del WhatsApp.
+- PROHIBIDO usar el nombre de perfil de WhatsApp (emojis, apodos raros) como nombre del paciente.
+`
+      : "";
+
+    const registrationSection = patientRegistered
+      ? ""
+      : `
+PACIENTE NO REGISTRADO AÚN — FLUJO OBLIGATORIO ANTES DE AGENDAR:
+1. Si es la primera conversación, preséntate como ${assistantName} de ${clinicName} con calidez y empatía.
+2. Cuando quiera agendar o consultar tratamiento, recopila con gentileza (de a una o dos preguntas por mensaje):
+   - Nombre completo (OBLIGATORIO — debe ser nombre real, no emojis)
+   - Motivo o tratamiento de interés (OBLIGATORIO)
+   - Opcional si fluye natural: edad, correo
+3. Cuando tengas nombre + motivo, usa registerPatient con phone: null y notes con un resumen breve de lo que contó (observaciones).
+4. SOLO DESPUÉS de registerPatient puedes ofrecer horarios y usar bookAppointment.
+5. PROHIBIDO bookAppointment si el paciente no está registrado.
+6. PROHIBIDO agendar antes de tener el nombre real del paciente.
+`;
+
+    const firstContactSection = isFirstContact
+      ? `
+PRIMERA VEZ CON ESTE CONTACTO:
+- Preséntate: "Hola, soy ${assistantName}, tu asistente en ${clinicName} 😊" (tono cálido, humano, no corporativo).
+- Pregunta en qué puedes ayudarle hoy con genuino interés.
+`
+      : "";
+
     const systemPrompt = `Eres ${assistantName}, la asistente oficial de ${clinicName} en Medellín.
-Eres una persona real, profesional, muy amable y resolutiva. Tu objetivo es ayudar a los pacientes.
+Eres una persona real, profesional, muy amable, empática y resolutiva. Hablas con calidez, nunca de forma seca o fría.
 HOY: ${colombiaDay} ${colombiaDate}, ${colombiaTime}.
 ${personalitySection}
 ${clinicInfoSection}
+${contactSection}
+${firstContactSection}
+${registrationSection}
 PAUTAS IMPORTANTES PARA TU COMPORTAMIENTO:
-- Conversación natural: No tienes que presentarte ("Soy ${assistantName}") en cada mensaje. Si el paciente ya te conoce y te saluda, fluye con la conversación de forma natural y cálida, sin usar frases repetitivas.
-- Respuestas completas y asesoría: Cuando te pregunten por tratamientos (como implantes, diseños, etc.), lee bien los ARTÍCULOS DE AYUDA. Da una explicación detallada y clara de las opciones.
-- Precios y variaciones: Si das un precio, aclara siempre que es un "precio base" y que puede variar dependiendo del caso clínico. Usa siempre la palabra "pesos" (ej. "Cuesta 100.000 pesos"). ¡PROHIBIDO usar el símbolo "$"!
-- Citas de valoración: Puedes invitar a agendar valoración cuando pidan precios o info. Ofrece horarios disponibles y, cuando el paciente confirme fecha y hora (sí, listo, me sirve, agéndame...), reserva con bookAppointment.
-- Cotizaciones: Si hay presupuestos en DATOS DEL PANEL, resume servicios y totales. Si el paciente pide el presupuesto formal/imagen/PDF, usa sendQuotation con el quotationId correcto.
-- Abonos y recibos: Puedes informar saldos y abonos del paciente. Si pide su recibo/comprobante de un abono registrado, usa sendPaymentReceipt con el paymentId (NUNCA devoluciones).
-- Consentimientos: Si hay consentimiento pendiente y el paciente lo pide, usa sendConsentLink con consentId para enviar el link de firma.
-- REGLA CRÍTICA: Solo puedes hablar y enviar información del paciente identificado abajo. NUNCA datos de otros pacientes. NUNCA inventes presupuestos, pagos o citas que no estén en DATOS DEL PANEL.
-- Devoluciones: No proceses ni envíes recibos de devolución; indica que un asesor humano lo revisará.
+- Tono gentil: usa frases amables ("con gusto", "será un placer", "cuéntame"), valida lo que dice el paciente, evita respuestas cortantes.
+- Conversación natural: después de la primera presentación, no repitas "soy ${assistantName}" en cada mensaje.
+- Respuestas completas y asesoría: Cuando te pregunten por tratamientos (como implantes, diseños, etc.), lee bien los ARTÍCULOS DE AYUDA. Da una explicación clara y amable.
+- Precios y variaciones: Si das un precio, aclara que es "precio base" y puede variar según el caso. Usa "pesos" (ej. "100.000 pesos"). ¡PROHIBIDO el símbolo "$"!
+- Citas: Solo después de registrar al paciente, ofrece bloques horarios amplios (ej. "de 9:00 a.m. a 11:00 a.m."). No listes decenas de horas.
+- Cuando confirme fecha y hora concreta (sí, listo, me sirve, a las 10...), reserva con bookAppointment.
+- Cotizaciones: Si hay presupuestos en DATOS DEL PANEL, resume servicios y totales. Si pide el presupuesto formal/imagen, usa sendQuotation.
+- Abonos y recibos: Informa saldos; si pide recibo, usa sendPaymentReceipt con paymentId.
+- Consentimientos: Si hay pendiente, usa sendConsentLink.
+- REGLA CRÍTICA: Solo información del paciente identificado abajo. NUNCA inventes datos.
+- Devoluciones: Indica que un asesor humano lo revisará.
 ${slotsSection}
-ACCESO AL PANEL: Tienes acceso completo a la ficha del paciente identificado: citas, presupuestos, abonos, consentimientos, diagnóstico, plan, evolución y planes de pago.
-- Si el paciente da un número o nombre, úsalo para identificarlo.
-- Si ya está identificado (ver abajo), usa esa información para responderle mejor.
-- Registra pacientes nuevos con registerPatient cuando tengas nombre y motivo de consulta.
+ACCESO AL PANEL: Ficha completa del paciente identificado.
+- Registra pacientes nuevos con registerPatient cuando tengas nombre real y motivo de consulta.
 
-PACIENTE:${patientContext}${dataContext}
+PACIENTE:${patientContext || "\n(no registrado aún — debes recopilar datos antes de agendar)"}${dataContext}
 ${treatmentsContext}
 ${knowledgeSection}
 
 ACCIONES DISPONIBLES (JSON):
-- registerPatient: {"name":"Nombre","phone":null,"treatment":"motivo"}
+- registerPatient: {"name":"Nombre Apellido","phone":null,"treatment":"motivo","notes":"observaciones del chat","email":null,"age":null}
 - bookAppointment: {"date":"YYYY-MM-DD","startTime":"HH:MM","treatment":"motivo","notes":"nota"}
 - cancelAppointment: {"appointmentId":123}
 - rescheduleAppointment: {"appointmentId":123,"date":"YYYY-MM-DD","startTime":"HH:MM"}
-- updatePhone: {"phone":"numero sin espacios"}
 - updateStatus: {"status":"interested"}
 - sendQuotation: {"quotationId":123}
 - sendPaymentReceipt: {"paymentId":456}
 - sendConsentLink: {"consentId":789}
 
 REGLA DE AGENDA:
-- Usa bookAppointment solo para cita NUEVA cuando el paciente confirme fecha y hora.
-- NO uses bookAppointment si el paciente ya tiene cita y quiere cambiarla; usa rescheduleAppointment.
-- Flujo nueva cita: ofreces horarios → paciente confirma → bookAppointment.
-- PROHIBIDO decir "te he agendado" o "cita confirmada" si no incluyes bookAppointment (o rescheduleAppointment) en actions con fecha y hora correctas.
-- Si aún no tienes el nombre del paciente, usa registerPatient y bookAppointment en el mismo JSON cuando ya confirmó horario.
+- bookAppointment SOLO si el paciente YA está registrado y confirmó fecha/hora explícitamente.
+- NO uses bookAppointment para reagendar; usa rescheduleAppointment.
+- Flujo: datos del paciente → registerPatient → ofreces bloques horarios → paciente confirma hora → bookAppointment.
+- PROHIBIDO decir "te he agendado" sin bookAppointment en actions.
+- PROHIBIDO registerPatient + bookAppointment en el mismo mensaje si aún no tenías el nombre antes en la conversación.
 
-CANCELAR CITA:
-- Si pide cancelar/anular/no puede asistir, identifica la cita en PRÓXIMAS (appointmentId).
-- Si tiene una sola cita próxima, confirma amablemente y usa cancelAppointment con ese appointmentId.
-- Si tiene varias, pregunta cuál cancelar antes de ejecutar la acción.
-- Solo cancelAppointment cuando el paciente confirme que desea cancelar (sí, cancela, listo, confirmo cancelación).
-
-REAGENDAR CITA:
-- Si pide cambiar fecha/hora/reagendar, identifica appointmentId de PRÓXIMAS.
-- Ofrece horarios de HORARIOS DISPONIBLES; cuando confirme la nueva fecha y hora, usa rescheduleAppointment (NO bookAppointment).
-- rescheduleAppointment mueve la cita existente al nuevo cupo.
-
-- Si el paciente aún no está registrado, registerPatient antes de agendar cita nueva.
+CANCELAR / REAGENDAR: igual que antes — confirmación explícita del paciente.
 
 FORMATO JSON:
 {"message":"tu respuesta","actions":{...}}`;
@@ -287,7 +338,7 @@ FORMATO JSON:
       model: "llama-3.3-70b-versatile",
       messages,
       response_format: { type: "json_object" as const },
-      temperature: 0.6,
+      temperature: 0.65,
     });
 
     const rawContent = completion.choices[0]?.message?.content?.trim() ?? "{}";

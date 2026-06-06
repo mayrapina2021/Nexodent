@@ -11,15 +11,15 @@ export type BookingOutcome =
 
 const FAILURE_TEXT: Record<BookingFailureReason, string> = {
   blocked:
-    "Para dejarla registrada en la agenda, ¿me confirmas por favor la fecha y la hora que eliges?",
+    "Para dejarla registrada en la agenda, ¿me confirmas por favor la fecha y la hora que prefieres? Con gusto te ayudo 😊",
   slot_conflict:
-    "Ese horario ya no está disponible en la agenda. ¿Te sirve otro de los cupos que te mencioné?",
+    "Uy, ese horario acaba de ocuparse. ¿Te gustaría otro dentro de los bloques que te mencioné?",
   patient_conflict:
-    "Ya aparece una cita tuya ese día en el sistema. ¿Quieres cambiarla o elegir otra fecha?",
+    "Veo que ya tienes una cita ese día. ¿Prefieres cambiarla o elegir otra fecha?",
   no_patient:
-    "Para registrar la cita en la agenda necesito tu nombre completo, por favor.",
+    "Con mucho gusto te ayudo a agendar 😊 Antes, ¿me regalas tu nombre completo y el motivo de tu consulta?",
   invalid_time:
-    "No pude registrar la hora en la agenda. ¿Me la confirmas así: 2:00 p.m. o 14:00?",
+    "No logré entender bien la hora. ¿Me la confirmas así, por ejemplo: 10:00 a.m.?",
 };
 
 /** Ajusta el texto de Andrea si la cita no quedó guardada en la base de datos. */

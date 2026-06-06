@@ -74,28 +74,28 @@
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
 
-  --background: 35 30% 90%;
+  --background: 40 18% 96%;
   --foreground: 222 25% 15%;
-  --border: 35 20% 82%;
-  --input: 35 20% 78%;
+  --border: 40 12% 88%;
+  --input: 40 12% 90%;
   --ring: 226 50% 25%;
 
-  --card: 35 25% 94%;
+  --card: 40 15% 98%;
   --card-foreground: 222 25% 15%;
-  --card-border: 35 20% 86%;
+  --card-border: 40 12% 90%;
 
-  --popover: 35 25% 94%;
+  --popover: 40 15% 98%;
   --popover-foreground: 222 25% 15%;
-  --popover-border: 35 20% 84%;
+  --popover-border: 40 12% 90%;
 
   /* High Contrast Dental Blue */
   --primary: 226 50% 28%;
   --primary-foreground: 35 30% 95%;
 
-  --secondary: 35 25% 86%;
+  --secondary: 40 12% 92%;
   --secondary-foreground: 222 25% 20%;
 
-  --muted: 35 20% 88%;
+  --muted: 40 10% 93%;
   --muted-foreground: 222 15% 40%;
 
   /* High Contrast Warm Accent */
@@ -105,13 +105,13 @@
   --destructive: 0 84% 40%;
   --destructive-foreground: 35 30% 95%;
 
-  /* Sidebar — Solid Bone */
-  --sidebar: 35 20% 88%;
+  /* Sidebar — suave en claro */
+  --sidebar: 40 14% 94%;
   --sidebar-foreground: 222 25% 12%;
-  --sidebar-border: 35 15% 82%;
+  --sidebar-border: 40 12% 88%;
   --sidebar-primary: 226 50% 28%;
   --sidebar-primary-foreground: 35 30% 95%;
-  --sidebar-accent: 35 15% 84%;
+  --sidebar-accent: 40 12% 90%;
   --sidebar-accent-foreground: 226 50% 20%;
   --sidebar-ring: 226 50% 28%;
 

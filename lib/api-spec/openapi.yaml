@@ -470,6 +470,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ConversationDetail"
+    delete:
+      operationId: deleteConversation
+      tags: [conversations]
+      summary: Delete a conversation and all its messages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversation deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required: [ok]
+        "404":
+          description: Conversation not found
 
   /conversations/{id}/mode:
     put:
@@ -508,6 +531,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UnreadStats"
+
+  /messages/media/{messageId}:
+    get:
+      operationId: getMessageMedia
+      tags: [messages]
+      summary: Download media attached to a message
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Media file bytes
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Media not found
 
   /messages/{conversationId}:
     get:
@@ -1165,6 +1210,16 @@ components:
         sender:
           type: string
           enum: [patient, agent, ai]
+        messageType:
+          type: string
+          enum: [text, image, audio, video, document, sticker]
+          nullable: true
+        mediaMimeType:
+          type: string
+          nullable: true
+        hasMedia:
+          type: boolean
+          nullable: true
         sentAt:
           type: string
           format: date-time

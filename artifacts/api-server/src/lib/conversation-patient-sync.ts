@@ -2,6 +2,7 @@ import { db, conversationsTable, patientsTable } from "@workspace/db";
 import { eq, or, sql } from "drizzle-orm";
 import { phoneToJidIfValid, jidToDisplayPhone } from "./jid-utils";
 import { logger } from "./logger";
+import { displayNameForUnknownContact, isValidPatientName } from "./patient-name-utils";
 
 /** Normaliza a solo dígitos (sin +). */
 export function normalizePhoneDigits(phone: string): string {
@@ -92,9 +93,10 @@ export async function resolveConversationIdentity(
   }
 
   const valid = isValidColombianPhone(waPhone);
+  const displayName = isValidPatientName(waPushName) ? waPushName.trim() : displayNameForUnknownContact();
   return {
     patientId: null,
-    patientName: waPushName || "Contacto WhatsApp",
+    patientName: displayName,
     phone: valid ? formatColombianPhone(waPhone) : waPhone,
     phoneIsValid: valid,
   };

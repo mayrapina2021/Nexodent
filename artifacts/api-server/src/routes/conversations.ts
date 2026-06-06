@@ -115,6 +115,19 @@ router.get("/conversations/:id", async (req, res): Promise<void> => {
   res.json({ conversation: enrichedConv, patient, messages: messages.map(serializeMessageForApi) });
 });
 
+router.delete("/conversations/:id", async (req, res): Promise<void> => {
+  const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(raw, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "ID inválido" }); return; }
+
+  const [conv] = await db.select().from(conversationsTable).where(eq(conversationsTable.id, id));
+  if (!conv) { res.status(404).json({ error: "Conversación no encontrada" }); return; }
+
+  await db.delete(conversationsTable).where(eq(conversationsTable.id, id));
+  logger.info({ conversationId: id, phone: conv.phone }, "Conversación eliminada desde el panel");
+  res.json({ ok: true });
+});
+
 router.put("/conversations/:id/mode", async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const params = SetConversationModeParams.safeParse({ id: parseInt(raw, 10) });
@@ -224,7 +237,7 @@ router.post("/conversations/incoming", async (req, res): Promise<void> => {
 
   try {
     const availableSlots = await getAvailableSlots();
-    aiResult = await generateAIResponse(conv.id, message, { availableSlots });
+    aiResult = await generateAIResponse(conv.id, message, { availableSlots, contactPhone: formattedPhone });
 
     let aiText = "";
     try {
@@ -404,14 +417,14 @@ router.post("/conversations/:id/ai-reply", async (req, res): Promise<void> => {
 
   const context = triggerMessage ?? lastMessages[0]?.content ?? "Hola";
   const availableSlots = await getAvailableSlots();
+  const formattedPhone = conv.phone.startsWith("+") ? conv.phone : `+${conv.phone.replace(/\D/g, "")}`;
 
   let aiMsg = null;
   let sentToWhatsApp = false;
 
   try {
-    const aiResponse = await generateAIResponse(id, context, { availableSlots });
+    const aiResponse = await generateAIResponse(id, context, { availableSlots, contactPhone: formattedPhone });
 
-    const formattedPhone = conv.phone.startsWith("+") ? conv.phone : `+${conv.phone.replace(/\D/g, "")}`;
     const { conversation: updatedConv, bookingOutcome } = await processAIActions(
       {
         id: conv.id,

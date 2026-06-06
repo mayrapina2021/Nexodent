@@ -2,6 +2,17 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      (function () {
+        var key = "nexodent-theme";
+        var stored = localStorage.getItem(key);
+        var theme = stored === "dark" || stored === "light" || stored === "system" ? stored : "light";
+        var resolved = theme === "system"
+          ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+          : theme;
+        if (resolved === "dark") document.documentElement.classList.add("dark");
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
     <title>Nexodent CRM — Gestión Dental Inteligente</title>
     <meta name="description" content="Nexodent: CRM dental con bot de WhatsApp inteligente, gestión de pacientes, citas y más." />

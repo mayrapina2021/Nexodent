@@ -24,6 +24,7 @@ import { useState, useEffect, useRef, Suspense } from "react";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Skeleton } from "./ui/skeleton";
 import ClinicLogo from "./clinic-logo";
+import { ThemeToggle } from "./theme-toggle";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Float, Sphere } from "@react-three/drei";
 import * as THREE from "three";
@@ -198,9 +199,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        {/* User + Logout */}
-        <div className="p-4 border-t border-sidebar-border mt-auto">
-          <div className="flex items-center gap-3 mb-3">
+        {/* User + tema + Logout */}
+        <div className="p-4 border-t border-sidebar-border mt-auto space-y-2">
+          <ThemeToggle variant="sidebar" />
+          <div className="flex items-center gap-3">
             <Avatar className="h-9 w-9 border border-sidebar-border shrink-0">
               <AvatarFallback className="bg-primary text-primary-foreground text-xs">
                 {(user.name ?? "Ad").substring(0, 2).toUpperCase()}
@@ -226,11 +228,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* ── Mobile Top Header ─────────────────────────────────────────────── */}
       <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-card sticky top-0 z-30">
         <ClinicLogo size="sm" />
-        <Avatar className="h-8 w-8 border border-border">
-          <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-            {(user.name ?? "Ad").substring(0, 2).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
+        <div className="flex items-center gap-1">
+          <ThemeToggle />
+          <Avatar className="h-8 w-8 border border-border">
+            <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+              {(user.name ?? "Ad").substring(0, 2).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+        </div>
       </div>
 
       {/* ── Main Content ──────────────────────────────────────────────────── */}
